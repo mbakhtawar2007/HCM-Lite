@@ -6,6 +6,7 @@ import { env } from './config/env.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 import authRoutes from './routes/authRoutes.js';
 import attendanceRoutes from './routes/attendanceRoutes.js';
+import dashboardRoutes from './routes/dashboardRoutes.js';
 import employeeRoutes from './routes/employeeRoutes.js';
 import leaveRoutes from './routes/leaveRoutes.js';
 import miscRoutes from './routes/miscRoutes.js';
@@ -34,6 +35,7 @@ app.use('/api/employees', employeeRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/leaves', leaveRoutes);
 app.use('/api/payroll', payrollRoutes);
+app.use('/api/dashboards', dashboardRoutes);
 app.use('/api', miscRoutes);
 
 // 404s, then the central error handler (order matters).
