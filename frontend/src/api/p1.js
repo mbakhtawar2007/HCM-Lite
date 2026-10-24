@@ -20,7 +20,11 @@ export const updateEmployee = async (id, data) => (await api.patch(`/employees/$
 export const exportEmployees = async () => {
   const res = await api.get('/employees/export/csv', { responseType: 'blob' });
   const url = URL.createObjectURL(res.data);
-  const a = document.createElement('a'); a.href = url; a.download = 'employees.csv'; a.click(); URL.revokeObjectURL(url);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'employees.csv';
+  a.click();
+  URL.revokeObjectURL(url);
 };
 export const importDryRun = async (csv) => (await api.post('/employees/import/dry-run', { csv })).data;
 export const importEmployees = async (csv) => (await api.post('/employees/import', { csv })).data;
@@ -29,7 +33,6 @@ export const checkIn = async (location = null) => (await api.post('/attendance/c
 export const checkOut = async () => (await api.post('/attendance/check-out')).data;
 export const myAttendance = async () => (await api.get('/attendance/me')).data;
 export const attendanceBoard = async (date) => (await api.get('/attendance/board', { params: { date } })).data;
-export const listAttendance = async (params = {}) => (await api.get('/attendance', { params })).data;
 export const requestCorrection = async (data) => (await api.post('/attendance/corrections', data)).data;
 export const listCorrections = async () => (await api.get('/attendance/corrections')).data;
 export const decideCorrection = async (id, data) => (await api.patch(`/attendance/corrections/${id}`, data)).data;
@@ -49,7 +52,11 @@ export const downloadPayslipPdf = async (runId, employeeId, month) => {
   // Via the axios client so the Authorization header is included.
   const res = await api.get(`/payroll/runs/${runId}/payslip/${employeeId}/pdf`, { responseType: 'blob' });
   const url = URL.createObjectURL(res.data);
-  const a = document.createElement('a'); a.href = url; a.download = `payslip-${month}-${employeeId}.pdf`; a.click(); URL.revokeObjectURL(url);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `payslip-${month}-${employeeId}.pdf`;
+  a.click();
+  URL.revokeObjectURL(url);
 };
 
 export const listAuditLogs = async (params = {}) => (await api.get('/audit-logs', { params })).data;

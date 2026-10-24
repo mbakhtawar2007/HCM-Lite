@@ -4,9 +4,15 @@ import { ApiError } from '../utils/errors.js';
 import { LeaveRequest } from '../models/LeaveRequest.js';
 import { LeaveType } from '../models/LeaveType.js';
 import { Holiday } from '../models/Holiday.js';
-import { getSetting, workingDaysBetween, workingDaysInYear, dayStart } from '../services/settingsService.js';
+import {
+  getSetting,
+  workingDaysBetween,
+  workingDaysInYear,
+  yearBounds,
+  dayStart,
+} from '../services/settingsService.js';
 import { notifyUser, writeAudit } from '../services/attendanceService.js';
-import { ownEmployee, scopedEmployee } from '../utils/scope.js';
+import { ownEmployee } from '../utils/scope.js';
 import { assertEnumQuery, assertObjectIdQuery } from '../utils/queryGuard.js';
 
 // Phase 1 fix: previously every approved leave overlapping a year
@@ -14,29 +20,27 @@ import { assertEnumQuery, assertObjectIdQuery } from '../utils/queryGuard.js';
 // Dec–Jan was double-counted (and charged fully to the start year on
 // apply). Now only the working days actually falling in that year count.
 async function usedDays(employeeId, leaveTypeId, year, holidays, weekendDays) {
-  const start = new Date(Date.UTC(year, 0, 1));
-  const end = new Date(Date.UTC(year, 11, 31));
+  const { start, end } = yearBounds(year);
   const approved = await LeaveRequest.find({
-    employee: employeeId, leaveType: leaveTypeId, status: 'APPROVED',
-    startDate: { $lte: end }, endDate: { $gte: start },
+    employee: employeeId,
+    leaveType: leaveTypeId,
+    status: 'APPROVED',
+    startDate: { $lte: end },
+    endDate: { $gte: start },
   });
-  return approved.reduce(
-    (sum, l) => sum + workingDaysInYear(l.startDate, l.endDate, year, holidays, weekendDays),
-    0,
-  );
+  return approved.reduce((sum, l) => sum + workingDaysInYear(l.startDate, l.endDate, year, holidays, weekendDays), 0);
 }
 
 async function pendingDays(employeeId, leaveTypeId, year, holidays, weekendDays) {
-  const start = new Date(Date.UTC(year, 0, 1));
-  const end = new Date(Date.UTC(year, 11, 31));
+  const { start, end } = yearBounds(year);
   const pending = await LeaveRequest.find({
-    employee: employeeId, leaveType: leaveTypeId, status: 'PENDING',
-    startDate: { $lte: end }, endDate: { $gte: start },
+    employee: employeeId,
+    leaveType: leaveTypeId,
+    status: 'PENDING',
+    startDate: { $lte: end },
+    endDate: { $gte: start },
   });
-  return pending.reduce(
-    (sum, l) => sum + workingDaysInYear(l.startDate, l.endDate, year, holidays, weekendDays),
-    0,
-  );
+  return pending.reduce((sum, l) => sum + workingDaysInYear(l.startDate, l.endDate, year, holidays, weekendDays), 0);
 }
 
 export const getBalances = asyncHandler(async (req, res) => {
@@ -59,7 +63,8 @@ export const getBalances = asyncHandler(async (req, res) => {
     balances.push({
       leaveType: t,
       quota: t.isUnlimited ? null : t.yearlyQuota,
-      used, pending,
+      used,
+      pending,
       remaining: t.isUnlimited ? null : Math.max(0, t.yearlyQuota - used),
     });
   }
@@ -78,8 +83,10 @@ export const applyLeave = asyncHandler(async (req, res) => {
   const workingDays = workingDaysBetween(start, end, holidays, setting.weekendDays);
   if (workingDays === 0) throw new ApiError(422, 'Selected dates contain no working days');
   const overlap = await LeaveRequest.findOne({
-    employee: emp._id, status: { $in: ['PENDING', 'APPROVED'] },
-    startDate: { $lte: end }, endDate: { $gte: start },
+    employee: emp._id,
+    status: { $in: ['PENDING', 'APPROVED'] },
+    startDate: { $lte: end },
+    endDate: { $gte: start },
   });
   if (overlap) throw new ApiError(422, 'Leave overlaps an existing pending or approved leave');
   if (!leaveType.isUnlimited) {
@@ -98,7 +105,12 @@ export const applyLeave = asyncHandler(async (req, res) => {
     }
   }
   const leave = await LeaveRequest.create({
-    employee: emp._id, leaveType: leaveType._id, startDate: start, endDate: end, workingDays, reason: req.body.reason,
+    employee: emp._id,
+    leaveType: leaveType._id,
+    startDate: start,
+    endDate: end,
+    workingDays,
+    reason: req.body.reason,
   });
   await writeAudit(req, 'CREATE', 'LeaveRequest', leave._id, null, { workingDays });
   res.status(201).json({ success: true, leave });
@@ -159,9 +171,13 @@ export const decideLeave = asyncHandler(async (req, res) => {
   const { Employee } = await import('../models/Employee.js');
   const emp = await Employee.findById(leave.employee);
   if (emp) {
-    await notifyUser(emp.user, 'LEAVE_DECISION', `Leave ${req.body.status.toLowerCase()}`,
+    await notifyUser(
+      emp.user,
+      'LEAVE_DECISION',
+      `Leave ${req.body.status.toLowerCase()}`,
       `Your ${leave.leaveType.name} leave (${leave.startDate.toISOString().slice(0, 10)} to ${leave.endDate.toISOString().slice(0, 10)}) was ${req.body.status.toLowerCase()}.${req.body.comment ? ` Comment: ${req.body.comment}` : ''}`,
-      leave._id);
+      leave._id,
+    );
   }
   res.status(200).json({ success: true, leave });
 });

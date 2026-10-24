@@ -6,7 +6,6 @@ export const notFound = (req, _res, next) => {
 };
 
 // Central error handler — must be the last middleware in app.js.
-// eslint-disable-next-line no-unused-vars
 export const errorHandler = (err, _req, res, _next) => {
   let statusCode = err.statusCode || 500;
   let message = err.message || 'Server error';

@@ -2,7 +2,7 @@ import { Attendance } from '../models/Attendance.js';
 import { LeaveRequest } from '../models/LeaveRequest.js';
 import { LeaveType } from '../models/LeaveType.js';
 import { computeAttendanceStatus } from './attendanceService.js';
-import { dayStart, listWorkingDaysInMonth, workingDaysBetween } from './settingsService.js';
+import { dayStart, listWorkingDaysInMonth, monthBounds, workingDaysBetween } from './settingsService.js';
 
 const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
 
@@ -23,7 +23,17 @@ export function monthlyTax(gross) {
 
 // Pure, hand-checkable core: given counts, produce the line. Tests use
 // this directly as well as through the full run builder below.
-export function computePayrollLine({ basicSalary, workingDays, effectiveWorkingDays, lateDays, halfDays, absentDays, unpaidLeaveDays, paidLeaveDays, presentDays }) {
+export function computePayrollLine({
+  basicSalary,
+  workingDays,
+  effectiveWorkingDays,
+  lateDays,
+  halfDays,
+  absentDays,
+  unpaidLeaveDays,
+  paidLeaveDays,
+  presentDays,
+}) {
   const gross = round2(basicSalary * 1.5);
   const hra = round2(basicSalary * 0.4);
   const medical = round2(basicSalary * 0.1);
@@ -34,21 +44,34 @@ export function computePayrollLine({ basicSalary, workingDays, effectiveWorkingD
   const tax = monthlyTax(gross);
   const netPay = round2(grossPayable - tax);
   return {
-    basicSalary, grossSalary: gross, hra, medical, workingDays, effectiveWorkingDays,
-    presentDays, lateDays, halfDays, absentDays, unpaidLeaveDays, paidLeaveDays,
-    deductionDays, grossPayable, tax, netPay,
+    basicSalary,
+    grossSalary: gross,
+    hra,
+    medical,
+    workingDays,
+    effectiveWorkingDays,
+    presentDays,
+    lateDays,
+    halfDays,
+    absentDays,
+    unpaidLeaveDays,
+    paidLeaveDays,
+    deductionDays,
+    grossPayable,
+    tax,
+    netPay,
   };
 }
 
 export async function buildPayrollLine(employee, year, month, setting, holidays) {
   const workingDaysList = listWorkingDaysInMonth(year, month, holidays, setting.weekendDays);
-  const monthStart = new Date(Date.UTC(year, month - 1, 1));
-  const monthEnd = new Date(Date.UTC(year, month, 0));
+  const { start: monthStart, end: monthEnd } = monthBounds(year, month);
   const join = employee.joiningDate ? dayStart(employee.joiningDate) : monthStart;
   const leave = employee.leavingDate ? dayStart(employee.leavingDate) : monthEnd;
   const effStart = join > monthStart ? join : monthStart;
   const effEnd = leave < monthEnd ? leave : monthEnd;
-  const effectiveWorkingDays = effStart > effEnd ? 0 : workingDaysBetween(effStart, effEnd, holidays, setting.weekendDays);
+  const effectiveWorkingDays =
+    effStart > effEnd ? 0 : workingDaysBetween(effStart, effEnd, holidays, setting.weekendDays);
   const effectiveDays = workingDaysList.filter((d) => d >= effStart && d <= effEnd);
 
   const attendance = await Attendance.find({
@@ -58,12 +81,12 @@ export async function buildPayrollLine(employee, year, month, setting, holidays)
   const attByKey = new Map(attendance.map((a) => [a.date.toISOString().slice(0, 10), a]));
 
   const approvedLeaves = await LeaveRequest.find({
-    employee: employee._id, status: 'APPROVED',
-    startDate: { $lte: monthEnd }, endDate: { $gte: monthStart },
+    employee: employee._id,
+    status: 'APPROVED',
+    startDate: { $lte: monthEnd },
+    endDate: { $gte: monthStart },
   }).populate('leaveType');
-  const unpaidTypeIds = new Set(
-    (await LeaveType.find({ isUnlimited: true })).map((t) => String(t._id)),
-  );
+  const unpaidTypeIds = new Set((await LeaveType.find({ isUnlimited: true })).map((t) => String(t._id)));
   const leaveDayType = new Map(); // dateKey -> 'UNPAID' | 'PAID'
   for (const lr of approvedLeaves) {
     const cur = dayStart(lr.startDate);
@@ -71,22 +94,33 @@ export async function buildPayrollLine(employee, year, month, setting, holidays)
     while (cur <= last) {
       const k = cur.toISOString().slice(0, 10);
       if (effectiveDays.some((d) => d.toISOString().slice(0, 10) === k)) {
-        leaveDayType.set(k, unpaidTypeIds.has(String(lr.leaveType?._id)) || lr.leaveType?.code === 'UNPAID' ? 'UNPAID' : 'PAID');
+        leaveDayType.set(
+          k,
+          unpaidTypeIds.has(String(lr.leaveType?._id)) || lr.leaveType?.code === 'UNPAID' ? 'UNPAID' : 'PAID',
+        );
       }
       cur.setUTCDate(cur.getUTCDate() + 1);
     }
   }
 
-  let presentDays = 0; let lateDays = 0; let halfDays = 0; let absentDays = 0;
-  let unpaidLeaveDays = 0; let paidLeaveDays = 0;
+  let presentDays = 0;
+  let lateDays = 0;
+  let halfDays = 0;
+  let absentDays = 0;
+  let unpaidLeaveDays = 0;
+  let paidLeaveDays = 0;
   for (const day of effectiveDays) {
     const k = day.toISOString().slice(0, 10);
     if (leaveDayType.has(k)) {
-      if (leaveDayType.get(k) === 'UNPAID') unpaidLeaveDays += 1; else paidLeaveDays += 1;
+      if (leaveDayType.get(k) === 'UNPAID') unpaidLeaveDays += 1;
+      else paidLeaveDays += 1;
       continue;
     }
     const rec = attByKey.get(k);
-    if (!rec) { absentDays += 1; continue; }
+    if (!rec) {
+      absentDays += 1;
+      continue;
+    }
     const status = computeAttendanceStatus(rec, setting);
     if (status === 'HALF_DAY') halfDays += 1;
     else if (status === 'LATE') lateDays += 1;
@@ -99,7 +133,12 @@ export async function buildPayrollLine(employee, year, month, setting, holidays)
       basicSalary: employee.basicSalary,
       workingDays: workingDaysList.length,
       effectiveWorkingDays,
-      presentDays, lateDays, halfDays, absentDays, unpaidLeaveDays, paidLeaveDays,
+      presentDays,
+      lateDays,
+      halfDays,
+      absentDays,
+      unpaidLeaveDays,
+      paidLeaveDays,
     }),
   };
 }

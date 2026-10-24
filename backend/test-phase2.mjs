@@ -5,10 +5,16 @@ import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import app from './src/app.js';
 
-let passed = 0; let failed = 0;
+let passed = 0;
+let failed = 0;
 const check = (name, cond, detail = '') => {
-  if (cond) { passed += 1; console.log(`PASS ${name}`); }
-  else { failed += 1; console.log(`FAIL ${name} ${detail}`); }
+  if (cond) {
+    passed += 1;
+    console.log(`PASS ${name}`);
+  } else {
+    failed += 1;
+    console.log(`FAIL ${name} ${detail}`);
+  }
 };
 
 const mongod = await MongoMemoryServer.create();
@@ -18,11 +24,20 @@ const base = `http://127.0.0.1:${server.address().port}`;
 const call = async (method, path, token, body, extraHeaders = {}) => {
   const res = await fetch(`${base}${path}`, {
     method,
-    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...extraHeaders },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...extraHeaders,
+    },
     body: body ? JSON.stringify(body) : undefined,
   });
   const text = await res.text();
-  let json = null; try { json = JSON.parse(text); } catch { /* non-json */ }
+  let json = null;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    /* non-json */
+  }
   return { status: res.status, json, text, headers: res.headers };
 };
 const login = async (email, pw) => (await call('POST', '/api/auth/login', null, { email, password: pw })).json.token;
@@ -33,12 +48,21 @@ async function loginChanged(email, tempPw, newPw = 'NewEmp123!') {
 }
 
 // --- Setup + HR + employees ---
-let r = await call('POST', '/api/setup', null, { companyName: 'Phase2 Co', adminName: 'Admin', adminEmail: 'admin@test.local', adminPassword: 'Admin123!' });
+let r = await call('POST', '/api/setup', null, {
+  companyName: 'Phase2 Co',
+  adminName: 'Admin',
+  adminEmail: 'admin@test.local',
+  adminPassword: 'Admin123!',
+});
 check('setup 201', r.status === 201, JSON.stringify(r.json));
 const adminToken = r.json.token;
-r = await call('POST', '/api/users', adminToken, { name: 'HR One', email: 'hr@test.local', password: 'TempHr123!', role: 'HR' });
+r = await call('POST', '/api/users', adminToken, {
+  name: 'HR One',
+  email: 'hr@test.local',
+  password: 'TempHr123!',
+  role: 'HR',
+});
 check('admin creates HR', r.status === 201, JSON.stringify(r.json));
-const hrUserId = r.json.user._id;
 const hrToken = await loginChanged('hr@test.local', 'TempHr123!', 'HrNew123!');
 check('HR changed-password token works', !!hrToken, '');
 r = await call('POST', '/api/org/departments', adminToken, { name: 'Engineering' });
@@ -47,8 +71,14 @@ r = await call('POST', '/api/org/designations', adminToken, { name: 'Engineer', 
 const desigId = r.json.item._id;
 async function makeEmployee(code, email, name) {
   const rr = await call('POST', '/api/employees', hrToken, {
-    name, email, password: 'TempEmp123!', employeeCode: code, department: deptId, designation: desigId,
-    joiningDate: '2026-10-01', basicSalary: 100000,
+    name,
+    email,
+    password: 'TempEmp123!',
+    employeeCode: code,
+    department: deptId,
+    designation: desigId,
+    joiningDate: '2026-10-01',
+    basicSalary: 100000,
   });
   check(`HR registers ${code}`, rr.status === 201, JSON.stringify(rr.json));
   return rr.json.employee;
@@ -69,7 +99,12 @@ r = await call('GET', '/api/org/settings');
 check('no token 401 on settings', r.status === 401, String(r.status));
 
 // --- Wrong-role 403s ---
-r = await call('POST', '/api/users', hrToken, { name: 'Fake Admin', email: 'fake@test.local', password: 'Fake12345!', role: 'ADMIN' });
+r = await call('POST', '/api/users', hrToken, {
+  name: 'Fake Admin',
+  email: 'fake@test.local',
+  password: 'Fake12345!',
+  role: 'ADMIN',
+});
 check('HR cannot create users (incl. Admin) 403', r.status === 403, String(r.status));
 r = await call('PATCH', '/api/org/settings', hrToken, { companyName: 'Hijacked' });
 check('HR cannot change settings 403', r.status === 403, String(r.status));
@@ -117,12 +152,21 @@ check('employee cannot read another payslip 403', r.status === 403, String(r.sta
 r = await call('GET', `/api/payroll/runs/${runId}/payslip/${empA._id}`, aToken);
 check('employee can read own finalized payslip 200', r.status === 200, String(r.status));
 r = await call('GET', '/api/leaves', aToken);
-check('employee leave list is own only', r.status === 200 && (r.json.leaves || []).every((l) => String(l.employee._id || l.employee) === String(empA._id)), JSON.stringify(r.json).slice(0, 200));
+check(
+  'employee leave list is own only',
+  r.status === 200 && (r.json.leaves || []).every((l) => String(l.employee._id || l.employee) === String(empA._id)),
+  JSON.stringify(r.json).slice(0, 200),
+);
 
 // Leave + notification scope: B applies, HR approves, A must not mark B's notification read.
 const types = (await call('GET', '/api/org/leave-types', hrToken)).json.items;
 const annual = types.find((t) => t.code === 'ANNUAL');
-r = await call('POST', '/api/leaves', bToken, { leaveType: annual._id, startDate: '2026-11-02', endDate: '2026-11-03', reason: 'Trip' });
+r = await call('POST', '/api/leaves', bToken, {
+  leaveType: annual._id,
+  startDate: '2026-11-02',
+  endDate: '2026-11-03',
+  reason: 'Trip',
+});
 const leaveId = r.json.leave._id;
 r = await call('PATCH', `/api/leaves/${leaveId}/decision`, hrToken, { status: 'APPROVED', comment: 'OK' });
 check('HR approves B leave', r.status === 200, JSON.stringify(r.json));
@@ -145,7 +189,7 @@ r = await call('POST', '/api/audit-logs', adminToken, { action: 'FAKE' });
 check('audit POST has no route 404', r.status === 404, String(r.status));
 
 // --- Token invalidation after change-password ---
-const empC = await makeEmployee('EMP103', 'c@test.local', 'Emp C');
+await makeEmployee('EMP103', 'c@test.local', 'Emp C');
 const cTemp = await login('c@test.local', 'TempEmp123!');
 r = await call('GET', '/api/attendance/me', cTemp);
 check('temp token blocked from other endpoints 403', r.status === 403, String(r.status));
@@ -176,7 +220,7 @@ r = await call('GET', '/api/attendance/me', aToken2);
 check('A new token after reset+change works', r.status === 200, String(r.status));
 
 // --- Must-change-password enforcement (fresh temp user) ---
-const empD = await makeEmployee('EMP104', 'd@test.local', 'Emp D');
+await makeEmployee('EMP104', 'd@test.local', 'Emp D');
 const dTemp = await login('d@test.local', 'TempEmp123!');
 r = await call('GET', '/api/attendance/me', dTemp);
 check('must-change blocks attendance 403', r.status === 403 && /change/i.test(r.json.message || ''), String(r.status));
@@ -206,16 +250,32 @@ check('fresh login after reactivation works 200', r.status === 200, String(r.sta
 r = await call('PATCH', `/api/employees/${empA._id}`, aToken2, { basicSalary: 999999, role: 'ADMIN' });
 check('employee setting role/salary rejected 403', r.status === 403, String(r.status));
 r = await call('GET', `/api/employees/${empA._id}`, hrToken);
-check('employee salary/role unchanged after attempt', r.status === 200 && r.json.employee.basicSalary === 100000 && r.json.employee.user.role === 'EMPLOYEE', JSON.stringify(r.json.employee).slice(0, 300));
+check(
+  'employee salary/role unchanged after attempt',
+  r.status === 200 && r.json.employee.basicSalary === 100000 && r.json.employee.user.role === 'EMPLOYEE',
+  JSON.stringify(r.json.employee).slice(0, 300),
+);
 r = await call('PATCH', `/api/employees/${empA._id}`, hrToken, { role: 'ADMIN', basicSalary: 123456 });
-check('HR patch with role field: role stripped, salary applied (HR may set salary, not role)', r.status === 200 && r.json.employee.user.role === 'EMPLOYEE', JSON.stringify(r.json.employee).slice(0, 300));
+check(
+  'HR patch with role field: role stripped, salary applied (HR may set salary, not role)',
+  r.status === 200 && r.json.employee.user.role === 'EMPLOYEE',
+  JSON.stringify(r.json.employee).slice(0, 300),
+);
 r = await call('PATCH', `/api/employees/${empA._id}`, hrToken, { basicSalary: 100000 });
 check('HR restores salary to 100000', r.status === 200, String(r.status));
-r = await call('POST', '/api/auth/change-password', aToken2, { currentPassword: 'NewA123!', newPassword: 'NewA123!x', role: 'ADMIN' });
+r = await call('POST', '/api/auth/change-password', aToken2, {
+  currentPassword: 'NewA123!',
+  newPassword: 'NewA123!x',
+  role: 'ADMIN',
+});
 check('change-password with role field succeeds but role ignored', r.status === 200, String(r.status));
 const aToken3 = await login('a@test.local', 'NewA123!x');
 r = await call('GET', '/api/users/me', aToken3);
-check('role still EMPLOYEE after change-password attempt', r.status === 200 && r.json.user.role === 'EMPLOYEE', JSON.stringify(r.json.user));
+check(
+  'role still EMPLOYEE after change-password attempt',
+  r.status === 200 && r.json.user.role === 'EMPLOYEE',
+  JSON.stringify(r.json.user),
+);
 
 // --- NoSQL / injection attempts ---
 r = await call('POST', '/api/auth/login', null, { email: { $gt: '' }, password: 'x' });
@@ -227,27 +287,47 @@ check('invalid attendance employeeId rejected 400', r.status === 400, String(r.s
 r = await call('GET', '/api/leaves?status=BOGUS', hrToken);
 check('invalid leave status rejected 400', r.status === 400, String(r.status));
 r = await call('GET', '/api/employees?q=.*', hrToken);
-check('regex search ".*" is escaped: does not return all employees', r.status === 200 && r.json.employees.length === 0, JSON.stringify(r.json).slice(0, 200));
+check(
+  'regex search ".*" is escaped: does not return all employees',
+  r.status === 200 && r.json.employees.length === 0,
+  JSON.stringify(r.json).slice(0, 200),
+);
 r = await call('GET', '/api/employees?q=(a+)+$', hrToken);
 check('regex ReDoS-style search does not crash (200)', r.status === 200, String(r.status));
 r = await call('GET', '/api/attendance?employeeId[$ne]=x', aToken3);
-check('operator-shaped attendance query cannot leak others (own only)', r.status === 200 && (r.json.attendance || []).length >= 0 && !JSON.stringify(r.json).includes('EMP102'), JSON.stringify(r.json).slice(0, 200));
+check(
+  'operator-shaped attendance query cannot leak others (own only)',
+  r.status === 200 && (r.json.attendance || []).length >= 0 && !JSON.stringify(r.json).includes('EMP102'),
+  JSON.stringify(r.json).slice(0, 200),
+);
 
 // --- Headers: CSP + CORS ---
 const health = await call('GET', '/api/health');
 const csp = health.headers.get('content-security-policy') || '';
-check('CSP header present with self + frame-ancestors none', csp.includes("default-src 'self'") && csp.includes("frame-ancestors 'none'"), csp);
+check(
+  'CSP header present with self + frame-ancestors none',
+  csp.includes("default-src 'self'") && csp.includes("frame-ancestors 'none'"),
+  csp,
+);
 const evil = await call('GET', '/api/health', null, null, { Origin: 'https://evil.example' });
-check('CORS does not reflect evil origin', evil.headers.get('access-control-allow-origin') !== 'https://evil.example', evil.headers.get('access-control-allow-origin') || '(none)');
+check(
+  'CORS does not reflect evil origin',
+  evil.headers.get('access-control-allow-origin') !== 'https://evil.example',
+  evil.headers.get('access-control-allow-origin') || '(none)',
+);
 
 // --- Brute force (short window via env, read fresh per request) ---
 process.env.LOGIN_MAX_FAILED_ATTEMPTS = '5';
 process.env.LOGIN_LOCK_MS = '1500';
-const empE = await makeEmployee('EMP105', 'e@test.local', 'Emp E');
+await makeEmployee('EMP105', 'e@test.local', 'Emp E');
 await loginChanged('e@test.local', 'TempEmp123!', 'Brute123!');
 for (let i = 1; i <= 4; i += 1) {
   r = await call('POST', '/api/auth/login', null, { email: 'e@test.local', password: 'Wrong123!' });
-  check(`brute force attempt ${i} generic 401`, r.status === 401 && r.json.message === 'Invalid email or password', String(r.status));
+  check(
+    `brute force attempt ${i} generic 401`,
+    r.status === 401 && r.json.message === 'Invalid email or password',
+    String(r.status),
+  );
 }
 r = await call('POST', '/api/auth/login', null, { email: 'e@test.local', password: 'Wrong123!' });
 check('5th failed attempt locks account 429', r.status === 429, String(r.status));

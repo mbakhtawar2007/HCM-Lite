@@ -1,6 +1,5 @@
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { conflict, notFoundError } from '../utils/errors.js';
-import { Setting } from '../models/Setting.js';
 import { Department } from '../models/Department.js';
 import { Designation } from '../models/Designation.js';
 import { LeaveType } from '../models/LeaveType.js';
@@ -50,9 +49,10 @@ const crud = (Model, name) => ({
     if (!item) throw notFoundError(`${name} not found`);
     if (name === 'Department') {
       if (await Employee.countDocuments({ department: item._id })) throw conflict('Department is in use by employees');
-      if (await Designation.countDocuments({ department: item._id })) throw conflict('Department is in use by designations');
+      if (await Designation.countDocuments({ department: item._id }))
+        throw conflict('Department is in use by designations');
     }
-    if (name === 'Designation' && await Employee.countDocuments({ designation: item._id })) {
+    if (name === 'Designation' && (await Employee.countDocuments({ designation: item._id }))) {
       throw conflict('Designation is in use by employees');
     }
     await item.deleteOne();

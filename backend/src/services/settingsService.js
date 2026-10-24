@@ -44,11 +44,14 @@ export function workingDaysBetween(start, end, holidays, weekendDays) {
   return count;
 }
 
-export function workingDaysInMonth(year, month, holidays, weekendDays) {
-  // month is 1-12
-  const start = new Date(Date.UTC(year, month - 1, 1));
-  const end = new Date(Date.UTC(year, month, 0));
-  return workingDaysBetween(start, end, holidays, weekendDays);
+// Shared calendar bounds (single source for year/month edges, UTC).
+// yearBounds: Jan 1 – Dec 31 of the given year. monthBounds: month is 1-12.
+export function yearBounds(year) {
+  return { start: new Date(Date.UTC(year, 0, 1)), end: new Date(Date.UTC(year, 11, 31)) };
+}
+
+export function monthBounds(year, month) {
+  return { start: new Date(Date.UTC(year, month - 1, 1)), end: new Date(Date.UTC(year, month, 0)) };
 }
 
 // Haversine distance in metres between two lat/lng points. Used by the
@@ -59,8 +62,7 @@ export function haversineMeters(lat1, lng1, lat2, lng2) {
   const R = 6371000;
   const dLat = toRad(lat2 - lat1);
   const dLng = toRad(lng2 - lng1);
-  const a = Math.sin(dLat / 2) ** 2
-    + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(a));
 }
 
@@ -69,8 +71,7 @@ export function haversineMeters(lat1, lng1, lat2, lng2) {
 // workingDays to every year it touched (and to the start year only on
 // apply). Working days skip weekends + holidays, as everywhere else.
 export function workingDaysInYear(start, end, year, holidays, weekendDays) {
-  const yearStart = new Date(Date.UTC(year, 0, 1));
-  const yearEnd = new Date(Date.UTC(year, 11, 31));
+  const { start: yearStart, end: yearEnd } = yearBounds(year);
   const from = dayStart(start) > yearStart ? dayStart(start) : yearStart;
   const to = dayStart(end) < yearEnd ? dayStart(end) : yearEnd;
   if (to < from) return 0;
@@ -79,8 +80,8 @@ export function workingDaysInYear(start, end, year, holidays, weekendDays) {
 
 export function listWorkingDaysInMonth(year, month, holidays, weekendDays) {
   const days = [];
-  const cur = new Date(Date.UTC(year, month - 1, 1));
-  const last = new Date(Date.UTC(year, month, 0));
+  const { start, end: last } = monthBounds(year, month);
+  const cur = new Date(start);
   while (cur <= last) {
     if (!isWeekend(cur, weekendDays) && !isHoliday(cur, holidays)) days.push(new Date(cur));
     cur.setUTCDate(cur.getUTCDate() + 1);

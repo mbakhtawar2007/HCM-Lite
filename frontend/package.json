@@ -8,6 +8,7 @@
   "description": "HCM Lite frontend: React + Vite",
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
+    "prettier": "^3.9.10",
     "vite": "^6.0.7"
   },
   "name": "hcm-lite-frontend",
@@ -15,7 +16,9 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "format": "prettier --write \"src/**/*.{js,jsx}\"",
+    "format:check": "prettier --check \"src/**/*.{js,jsx}\""
   },
   "type": "module",
   "version": "1.0.0"

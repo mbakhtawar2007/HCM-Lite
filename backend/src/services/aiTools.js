@@ -16,7 +16,16 @@ import {
   parseRange,
   resolveDepartment,
 } from './dashboardService.js';
-import { dateKey, dayStart, getSetting, isHoliday, isWeekend } from './settingsService.js';
+import {
+  dateKey,
+  dayStart,
+  getSetting,
+  isHoliday,
+  isWeekend,
+  workingDaysBetween,
+  workingDaysInYear,
+  yearBounds,
+} from './settingsService.js';
 import { ownEmployee } from '../utils/scope.js';
 import { escapeRegExp } from '../utils/escapeRegExp.js';
 
@@ -63,14 +72,18 @@ export const AI_TOOL_DEFS = [
     function: {
       name: 'get_headcount',
       description: 'Number of active employees, optionally in one department. Employees only see their own department.',
-      parameters: { type: 'object', properties: { department: { type: 'string', description: 'Department id or name (optional)' } } },
+      parameters: {
+        type: 'object',
+        properties: { department: { type: 'string', description: 'Department id or name (optional)' } },
+      },
     },
   },
   {
     type: 'function',
     function: {
       name: 'get_attendance_summary',
-      description: 'Attendance totals and attendance rate for a date range, optionally one department. Employees only see their own record.',
+      description:
+        'Attendance totals and attendance rate for a date range, optionally one department. Employees only see their own record.',
       parameters: {
         type: 'object',
         properties: {
@@ -115,7 +128,8 @@ export const AI_TOOL_DEFS = [
     type: 'function',
     function: {
       name: 'get_my_leave_balance',
-      description: 'The requesting user\'s own leave balances for the current year: quota, used, pending, remaining per type.',
+      description:
+        "The requesting user's own leave balances for the current year: quota, used, pending, remaining per type.",
       parameters: { type: 'object', properties: {} },
     },
   },
@@ -123,7 +137,8 @@ export const AI_TOOL_DEFS = [
     type: 'function',
     function: {
       name: 'get_payroll_summary',
-      description: 'Staff: aggregate payroll cost from FINALIZED runs only (never individual salaries). Employees: only their own last finalized payslip summary.',
+      description:
+        'Staff: aggregate payroll cost from FINALIZED runs only (never individual salaries). Employees: only their own last finalized payslip summary.',
       parameters: {
         type: 'object',
         properties: { from: { type: 'string' }, to: { type: 'string' } },
@@ -134,7 +149,8 @@ export const AI_TOOL_DEFS = [
     type: 'function',
     function: {
       name: 'search_employees',
-      description: 'Directory search by name, email or employee code. Never returns salary fields. Employees only ever get their own record.',
+      description:
+        'Directory search by name, email or employee code. Never returns salary fields. Employees only ever get their own record.',
       parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
     },
   },
@@ -146,30 +162,64 @@ const stripSalary = (emp) => {
   return o;
 };
 
-async function balancesFor(employeeId, year) {
-  const start = new Date(Date.UTC(year, 0, 1));
-  const end = new Date(Date.UTC(year, 11, 31));
+// Phase 5 bug fix: balances must match the REST balances endpoint and the
+// dashboard. Previously this summed each leave's FULL stored workingDays
+// (so a cross-year leave was charged in full to the current year) and
+// counted PENDING leaves from every year. Now only the working days
+// actually falling in `year` count, for both approved and pending.
+async function balancesFor(employeeId, year, setting, holidays) {
+  const { start, end } = yearBounds(year);
   const types = await LeaveType.find().sort({ code: 1 });
   const out = [];
   for (const t of types) {
-    const approved = await LeaveRequest.find({ employee: employeeId, leaveType: t._id, status: 'APPROVED', startDate: { $lte: end }, endDate: { $gte: start } });
-    const used = approved.reduce((s, l) => s + l.workingDays, 0);
-    const pendingReqs = await LeaveRequest.find({ employee: employeeId, leaveType: t._id, status: 'PENDING' });
-    const pending = pendingReqs.reduce((s, l) => s + l.workingDays, 0);
-    out.push({ leaveType: { code: t.code, name: t.name }, quota: t.isUnlimited ? null : t.yearlyQuota, used, pending, remaining: t.isUnlimited ? null : Math.max(0, t.yearlyQuota - used) });
+    const approved = await LeaveRequest.find({
+      employee: employeeId,
+      leaveType: t._id,
+      status: 'APPROVED',
+      startDate: { $lte: end },
+      endDate: { $gte: start },
+    });
+    const used = approved.reduce(
+      (s, l) => s + workingDaysInYear(l.startDate, l.endDate, year, holidays, setting.weekendDays),
+      0,
+    );
+    const pendingReqs = await LeaveRequest.find({
+      employee: employeeId,
+      leaveType: t._id,
+      status: 'PENDING',
+      startDate: { $lte: end },
+      endDate: { $gte: start },
+    });
+    const pending = pendingReqs.reduce(
+      (s, l) => s + workingDaysInYear(l.startDate, l.endDate, year, holidays, setting.weekendDays),
+      0,
+    );
+    out.push({
+      leaveType: { code: t.code, name: t.name },
+      quota: t.isUnlimited ? null : t.yearlyQuota,
+      used,
+      pending,
+      remaining: t.isUnlimited ? null : Math.max(0, t.yearlyQuota - used),
+    });
   }
   return { year, balances: out };
 }
 
 async function ownAttendanceSummary(emp, from, to, setting, holidays) {
   const records = await Attendance.find({ employee: emp._id, date: { $gte: from, $lte: to } });
-  const approved = await LeaveRequest.find({ employee: emp._id, status: 'APPROVED', startDate: { $lte: to }, endDate: { $gte: from } });
+  const approved = await LeaveRequest.find({
+    employee: emp._id,
+    status: 'APPROVED',
+    startDate: { $lte: to },
+    endDate: { $gte: from },
+  });
   const leaveDays = new Set();
   for (const lr of approved) {
     const cur = dayStart(lr.startDate);
     const last = dayStart(lr.endDate);
     while (cur <= last) {
-      if (cur >= from && cur <= to && !isWeekend(cur, setting.weekendDays) && !isHoliday(cur, holidays)) leaveDays.add(dateKey(cur));
+      if (cur >= from && cur <= to && !isWeekend(cur, setting.weekendDays) && !isHoliday(cur, holidays))
+        leaveDays.add(dateKey(cur));
       cur.setUTCDate(cur.getUTCDate() + 1);
     }
   }
@@ -197,7 +247,10 @@ async function ownAttendanceSummary(emp, from, to, setting, holidays) {
     cur.setUTCDate(cur.getUTCDate() + 1);
   }
   const due = totals.slots - totals.onLeave;
-  const rate = due > 0 ? Math.round(((totals.present + totals.late + totals.missingCheckout + totals.halfDay * 0.5) / due) * 100) / 100 : null;
+  const rate =
+    due > 0
+      ? Math.round(((totals.present + totals.late + totals.missingCheckout + totals.halfDay * 0.5) / due) * 100) / 100
+      : null;
   return { scope: 'own', ...totals, attendanceRate: rate };
 }
 
@@ -212,71 +265,167 @@ export async function runAiTool(user, name, args = {}) {
     case 'get_headcount': {
       const { dept, scopedToOwn } = await ownDeptScoped(user, args.department);
       const today = dayStart(new Date());
-      return { name, result: { headcount: await headcountAt(today, dept?._id || null), asOf: dateKey(today), department: dept ? dept.name : null, scopedToOwnDepartment: scopedToOwn } };
+      return {
+        name,
+        result: {
+          headcount: await headcountAt(today, dept?._id || null),
+          asOf: dateKey(today),
+          department: dept ? dept.name : null,
+          scopedToOwnDepartment: scopedToOwn,
+        },
+      };
     }
     case 'get_attendance_summary': {
       const { from, to } = rangeFrom(args);
       if (user.role === 'EMPLOYEE') {
         const own = await ownEmployee(user._id);
-        return { name, result: { from: dateKey(from), to: dateKey(to), ...(await ownAttendanceSummary(own, from, to, setting, holidays)) } };
+        return {
+          name,
+          result: {
+            from: dateKey(from),
+            to: dateKey(to),
+            ...(await ownAttendanceSummary(own, from, to, setting, holidays)),
+          },
+        };
       }
       const dept = await resolveDeptArg(args.department);
       const a = await analyseAttendance(from, to, dept?._id || null, setting, holidays);
-      return { name, result: { from: dateKey(from), to: dateKey(to), department: dept ? dept.name : null, present: a.present, late: a.late, halfDay: a.halfDay, missingCheckout: a.missingCheckout, absent: a.absent, onLeave: a.onLeave, workingDays: a.workingDays, attendanceRate: a.attendanceRate, lateRate: a.lateRate } };
+      return {
+        name,
+        result: {
+          from: dateKey(from),
+          to: dateKey(to),
+          department: dept ? dept.name : null,
+          present: a.present,
+          late: a.late,
+          halfDay: a.halfDay,
+          missingCheckout: a.missingCheckout,
+          absent: a.absent,
+          onLeave: a.onLeave,
+          workingDays: a.workingDays,
+          attendanceRate: a.attendanceRate,
+          lateRate: a.lateRate,
+        },
+      };
     }
     case 'get_late_comers': {
       if (!isStaff(user)) {
-        return { name, result: { refused: true, message: 'I can only show you your own attendance, not other employees\' late records.' } };
+        return {
+          name,
+          result: {
+            refused: true,
+            message: "I can only show you your own attendance, not other employees' late records.",
+          },
+        };
       }
       const { from, to } = rangeFrom(args);
       const dept = await resolveDeptArg(args.department);
       const a = await analyseAttendance(from, to, dept?._id || null, setting, holidays);
       const limit = Math.min(10, Math.max(1, Number(args.limit) || 5));
-      return { name, result: { from: dateKey(from), to: dateKey(to), department: dept ? dept.name : null, lateComers: a.topLateComers.slice(0, limit) } };
+      return {
+        name,
+        result: {
+          from: dateKey(from),
+          to: dateKey(to),
+          department: dept ? dept.name : null,
+          lateComers: a.topLateComers.slice(0, limit),
+        },
+      };
     }
     case 'get_leave_summary': {
       const { from, to } = rangeFrom(args);
       if (user.role === 'EMPLOYEE') {
         const own = await ownEmployee(user._id);
-        const approved = await LeaveRequest.find({ employee: own._id, status: 'APPROVED', startDate: { $lte: to }, endDate: { $gte: from } }).populate('leaveType', 'code name');
+        const approved = await LeaveRequest.find({
+          employee: own._id,
+          status: 'APPROVED',
+          startDate: { $lte: to },
+          endDate: { $gte: from },
+        }).populate('leaveType', 'code name');
         const byType = {};
         for (const lr of approved) {
           const code = lr.leaveType?.code || 'UNKNOWN';
-          byType[code] = (byType[code] || 0) + lr.workingDays;
+          // Phase 5 bug fix: count only the working days inside the
+          // requested range (staff analyseLeave already did this); the
+          // stored full workingDays over-counted range-spanning leaves.
+          const rangeStart = dayStart(lr.startDate) > from ? dayStart(lr.startDate) : from;
+          const rangeEnd = dayStart(lr.endDate) < to ? dayStart(lr.endDate) : to;
+          byType[code] =
+            (byType[code] || 0) +
+            (rangeEnd < rangeStart ? 0 : workingDaysBetween(rangeStart, rangeEnd, holidays, setting.weekendDays));
         }
         return { name, result: { scope: 'own', from: dateKey(from), to: dateKey(to), approvedDaysByType: byType } };
       }
       const dept = await resolveDeptArg(args.department);
       const l = await analyseLeave(from, to, dept?._id || null, setting, holidays);
-      return { name, result: { from: dateKey(from), to: dateKey(to), department: dept ? dept.name : null, byType: l.byType.map((b) => ({ code: b.leaveType.code, name: b.leaveType.name, approvedDays: b.approvedDays, utilization: b.utilization })) } };
+      return {
+        name,
+        result: {
+          from: dateKey(from),
+          to: dateKey(to),
+          department: dept ? dept.name : null,
+          byType: l.byType.map((b) => ({
+            code: b.leaveType.code,
+            name: b.leaveType.name,
+            approvedDays: b.approvedDays,
+            utilization: b.utilization,
+          })),
+        },
+      };
     }
     case 'get_my_leave_balance': {
       const own = await ownEmployee(user._id);
-      return { name, result: await balancesFor(own._id, new Date().getUTCFullYear()) };
+      return { name, result: await balancesFor(own._id, new Date().getUTCFullYear(), setting, holidays) };
     }
     case 'get_payroll_summary': {
       const { from, to } = rangeFrom(args);
       if (user.role === 'EMPLOYEE') {
         const own = await ownEmployee(user._id);
-        const lastRun = await PayrollRun.findOne({ status: 'FINALIZED', 'lines.employee': own._id }).sort({ month: -1 });
+        const lastRun = await PayrollRun.findOne({ status: 'FINALIZED', 'lines.employee': own._id }).sort({
+          month: -1,
+        });
         if (!lastRun) return { name, result: { scope: 'own', lastFinalizedPayslip: null } };
         const line = lastRun.lines.find((l) => String(l.employee) === String(own._id));
-        return { name, result: { scope: 'own', lastFinalizedPayslip: line ? { month: lastRun.month, grossPayable: line.grossPayable, tax: line.tax, netPay: line.netPay } : null } };
+        return {
+          name,
+          result: {
+            scope: 'own',
+            lastFinalizedPayslip: line
+              ? { month: lastRun.month, grossPayable: line.grossPayable, tax: line.tax, netPay: line.netPay }
+              : null,
+          },
+        };
       }
       const p = await analysePayroll(from, to, null);
-      return { name, result: { from: dateKey(from), to: dateKey(to), payrollCost: p.payrollCost, grossPayable: p.grossPayable, finalizedRuns: p.finalizedRuns, byDepartment: p.byDepartment } };
+      return {
+        name,
+        result: {
+          from: dateKey(from),
+          to: dateKey(to),
+          payrollCost: p.payrollCost,
+          grossPayable: p.grossPayable,
+          finalizedRuns: p.finalizedRuns,
+          byDepartment: p.byDepartment,
+        },
+      };
     }
     case 'search_employees': {
       const q = String(args.query || '').trim();
       if (user.role === 'EMPLOYEE') {
         const own = await ownEmployee(user._id);
-        const populated = await Employee.findById(own._id).populate('department', 'name').populate('designation', 'name').populate('user', 'name email role');
+        const populated = await Employee.findById(own._id)
+          .populate('department', 'name')
+          .populate('designation', 'name')
+          .populate('user', 'name email role');
         return { name, result: { scope: 'own', employees: [stripSalary(populated)] } };
       }
       const safe = new RegExp(escapeRegExp(q), 'i');
       const users = await User.find({ $or: [{ name: safe }, { email: safe }] }).select('_id');
       const emps = await Employee.find({ $or: [{ employeeCode: safe }, { user: { $in: users.map((u) => u._id) } }] })
-        .populate('department', 'name').populate('designation', 'name').populate('user', 'name email role').limit(20);
+        .populate('department', 'name')
+        .populate('designation', 'name')
+        .populate('user', 'name email role')
+        .limit(20);
       return { name, result: { employees: emps.map(stripSalary) } };
     }
     default:

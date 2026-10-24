@@ -6,8 +6,8 @@ import { Employee } from '../models/Employee.js';
 import { LeaveRequest } from '../models/LeaveRequest.js';
 import { Holiday } from '../models/Holiday.js';
 import { computeAttendanceStatus, todayDayStart, writeAudit } from '../services/attendanceService.js';
-import { getSetting, dayStart, dateKey, isWeekend, isHoliday, listWorkingDaysInMonth, haversineMeters } from '../services/settingsService.js';
-import { ownEmployee, scopedEmployee } from '../utils/scope.js';
+import { getSetting, dayStart, dateKey, isWeekend, isHoliday, haversineMeters } from '../services/settingsService.js';
+import { ownEmployee } from '../utils/scope.js';
 import { assertDateQuery, assertObjectIdQuery } from '../utils/queryGuard.js';
 
 // POST /api/attendance/check-in — server-stamped time, one record/day.
@@ -25,7 +25,9 @@ export const checkIn = asyncHandler(async (req, res) => {
     }
     const distance = haversineMeters(setting.officeLat, setting.officeLng, latitude, longitude);
     if (distance > setting.officeRadiusMeters) {
-      throw forbidden(`You are outside the office radius (${Math.round(distance)}m away, limit ${setting.officeRadiusMeters}m)`);
+      throw forbidden(
+        `You are outside the office radius (${Math.round(distance)}m away, limit ${setting.officeRadiusMeters}m)`,
+      );
     }
   }
   const today = todayDayStart();
@@ -88,7 +90,8 @@ export const listAttendance = asyncHandler(async (req, res) => {
   const setting = await getSetting();
   const records = await Attendance.find(filter).sort({ date: -1 }).populate('employee');
   res.status(200).json({
-    success: true, count: records.length,
+    success: true,
+    count: records.length,
     attendance: records.map((r) => ({ ...r.toJSON(), status: computeAttendanceStatus(r, setting) })),
   });
 });
@@ -103,7 +106,9 @@ export const dailyBoard = asyncHandler(async (req, res) => {
   const records = await Attendance.find({ date: day });
   const recByEmp = new Map(records.map((r) => [String(r.employee), r]));
   const approvedLeaves = await LeaveRequest.find({
-    status: 'APPROVED', startDate: { $lte: day }, endDate: { $gte: day },
+    status: 'APPROVED',
+    startDate: { $lte: day },
+    endDate: { $gte: day },
   });
   const leaveEmpIds = new Set(approvedLeaves.map((l) => String(l.employee)));
   const board = employees.map((e) => {
@@ -121,15 +126,21 @@ export const dailyBoard = asyncHandler(async (req, res) => {
 export const requestCorrection = asyncHandler(async (req, res) => {
   const emp = await ownEmployee(req.user._id);
   const attendance = await Attendance.findById(req.body.attendanceId);
-  if (!attendance || String(attendance.employee) !== String(emp._id)) throw notFoundError('Attendance record not found');
-  if (!req.body.requestedCheckIn && !req.body.requestedCheckOut) throw badRequest('Provide a requested check-in or check-out');
+  if (!attendance || String(attendance.employee) !== String(emp._id))
+    throw notFoundError('Attendance record not found');
+  if (!req.body.requestedCheckIn && !req.body.requestedCheckOut)
+    throw badRequest('Provide a requested check-in or check-out');
   const correction = await AttendanceCorrection.create({
-    employee: emp._id, attendance: attendance._id,
+    employee: emp._id,
+    attendance: attendance._id,
     requestedCheckIn: req.body.requestedCheckIn ? new Date(req.body.requestedCheckIn) : null,
     requestedCheckOut: req.body.requestedCheckOut ? new Date(req.body.requestedCheckOut) : null,
     reason: req.body.reason,
   });
-  await writeAudit(req, 'CREATE', 'AttendanceCorrection', correction._id, null, { attendance: String(attendance._id), reason: req.body.reason });
+  await writeAudit(req, 'CREATE', 'AttendanceCorrection', correction._id, null, {
+    attendance: String(attendance._id),
+    reason: req.body.reason,
+  });
   res.status(201).json({ success: true, correction });
 });
 
@@ -140,7 +151,10 @@ export const listCorrections = asyncHandler(async (req, res) => {
     const own = await ownEmployee(req.user._id);
     filter.employee = own._id;
   } else if (req.query.employeeId) filter.employee = req.query.employeeId;
-  const corrections = await AttendanceCorrection.find(filter).sort({ createdAt: -1 }).populate('employee').populate('attendance');
+  const corrections = await AttendanceCorrection.find(filter)
+    .sort({ createdAt: -1 })
+    .populate('employee')
+    .populate('attendance');
   res.status(200).json({ success: true, count: corrections.length, corrections });
 });
 

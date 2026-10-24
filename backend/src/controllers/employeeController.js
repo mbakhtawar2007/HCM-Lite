@@ -12,26 +12,37 @@ import { parseCsv } from '../services/csvService.js';
 import { csvEscape } from '../services/csvService.js';
 import { writeAudit } from '../services/attendanceService.js';
 import { escapeRegExp } from '../utils/escapeRegExp.js';
-import { ownEmployee, scopedEmployee } from '../utils/scope.js';
+import { scopedEmployee } from '../utils/scope.js';
 import mongoose from 'mongoose';
 
 const populate = (q) => q.populate('department').populate('designation').populate('user', 'name email role isActive');
 
 // POST /api/employees — HR/ADMIN. Creates the login + employee record.
 export const createEmployee = asyncHandler(async (req, res) => {
-  const { name, email, password, employeeCode, department, designation, phone, address, joiningDate, basicSalary } = req.body;
+  const { name, email, password, employeeCode, department, designation, phone, address, joiningDate, basicSalary } =
+    req.body;
   if (!(await Department.findById(department))) throw badRequest('Department not found');
   if (designation && !(await Designation.findById(designation))) throw badRequest('Designation not found');
   if (await User.findOne({ email })) throw conflict('An account with this email already exists');
-  if (await Employee.findOne({ employeeCode: employeeCode.toUpperCase() })) throw conflict('An employee with this code already exists');
+  if (await Employee.findOne({ employeeCode: employeeCode.toUpperCase() }))
+    throw conflict('An employee with this code already exists');
   const user = await User.create({
-    name, email, password: password || crypto.randomBytes(12).toString('base64').slice(0, 16),
-    role: 'EMPLOYEE', mustChangePassword: true,
+    name,
+    email,
+    password: password || crypto.randomBytes(12).toString('base64').slice(0, 16),
+    role: 'EMPLOYEE',
+    mustChangePassword: true,
   });
   try {
     const employee = await Employee.create({
-      user: user._id, employeeCode: employeeCode.toUpperCase(), department,
-      designation: designation || null, phone, address, joiningDate, basicSalary,
+      user: user._id,
+      employeeCode: employeeCode.toUpperCase(),
+      department,
+      designation: designation || null,
+      phone,
+      address,
+      joiningDate,
+      basicSalary,
     });
     await writeAudit(req, 'CREATE', 'Employee', employee._id, null, { employeeCode, email });
     res.status(201).json({ success: true, employee: await populate(Employee.findById(employee._id)) });
@@ -68,8 +79,15 @@ export const listEmployees = asyncHandler(async (req, res) => {
     query = Employee.find({ ...filter, $or: [{ employeeCode: safe }, { user: { $in: users.map((u) => u._id) } }] });
   }
   const total = await query.clone().countDocuments();
-  const employees = await populate(query.sort({ createdAt: 1 }).skip((page - 1) * limit).limit(limit));
-  res.status(200).json({ success: true, count: employees.length, total, page, pages: Math.ceil(total / limit), employees });
+  const employees = await populate(
+    query
+      .sort({ createdAt: 1 })
+      .skip((page - 1) * limit)
+      .limit(limit),
+  );
+  res
+    .status(200)
+    .json({ success: true, count: employees.length, total, page, pages: Math.ceil(total / limit), employees });
 });
 
 export const getMyEmployee = asyncHandler(async (req, res) => {
@@ -101,8 +119,10 @@ export const updateEmployee = asyncHandler(async (req, res) => {
     return res.status(200).json({ success: true, employee: await populate(Employee.findById(emp._id)) });
   } else {
     const before = emp.toJSON();
-    if (req.body.department && !(await Department.findById(req.body.department))) throw badRequest('Department not found');
-    if (req.body.designation && !(await Designation.findById(req.body.designation))) throw badRequest('Designation not found');
+    if (req.body.department && !(await Department.findById(req.body.department)))
+      throw badRequest('Department not found');
+    if (req.body.designation && !(await Designation.findById(req.body.designation)))
+      throw badRequest('Designation not found');
     // Phase 1 fix: name lives on the linked User, not on Employee, so
     // the old Object.assign silently dropped HR name edits. Route name
     // to the User document and keep it out of the Employee assign.
@@ -115,8 +135,6 @@ export const updateEmployee = asyncHandler(async (req, res) => {
     await writeAudit(req, 'UPDATE', 'Employee', emp._id, before, emp.toJSON());
     return res.status(200).json({ success: true, employee: await populate(Employee.findById(emp._id)) });
   }
-  await emp.save();
-  res.status(200).json({ success: true, employee: await populate(Employee.findById(emp._id)) });
 });
 
 // GET /api/employees/:id/360 — details + attendance + leave + payslip lines.
@@ -131,11 +149,17 @@ export const getEmployee360 = asyncHandler(async (req, res) => {
   // query had no status filter, so draft lines leaked into 360).
   // Admin/HR keep seeing all runs, including drafts, for review.
   const visibleRuns = req.user.role === 'EMPLOYEE' ? runs.filter((r) => r.status === 'FINALIZED') : runs;
-  const payslips = visibleRuns.flatMap((r) => r.lines.filter((l) => String(l.employee) === String(emp._id)).map((l) => ({ month: r.month, status: r.status, ...l.toObject() })));
+  const payslips = visibleRuns.flatMap((r) =>
+    r.lines
+      .filter((l) => String(l.employee) === String(emp._id))
+      .map((l) => ({ month: r.month, status: r.status, ...l.toObject() })),
+  );
   res.status(200).json({
     success: true,
     employee: await populate(Employee.findById(emp._id)),
-    attendance, leaves, payslips,
+    attendance,
+    leaves,
+    payslips,
   });
 });
 
@@ -143,10 +167,20 @@ export const getEmployee360 = asyncHandler(async (req, res) => {
 export const exportEmployeesCsv = asyncHandler(async (_req, res) => {
   const employees = await populate(Employee.find().sort({ employeeCode: 1 }));
   const header = 'employeeCode,name,email,department,designation,joiningDate,basicSalary,phone';
-  const lines = employees.map((e) => [
-    e.employeeCode, e.user?.name || '', e.user?.email || '', e.department?.name || '',
-    e.designation?.name || '', e.joiningDate?.toISOString().slice(0, 10) || '', e.basicSalary, e.phone || '',
-  ].map(csvEscape).join(','));
+  const lines = employees.map((e) =>
+    [
+      e.employeeCode,
+      e.user?.name || '',
+      e.user?.email || '',
+      e.department?.name || '',
+      e.designation?.name || '',
+      e.joiningDate?.toISOString().slice(0, 10) || '',
+      e.basicSalary,
+      e.phone || '',
+    ]
+      .map(csvEscape)
+      .join(','),
+  );
   res.setHeader('Content-Type', 'text/csv');
   res.setHeader('Content-Disposition', 'attachment; filename="employees.csv"');
   res.status(200).send([header, ...lines].join('\n'));
@@ -161,7 +195,8 @@ async function validateImportRows(csvText) {
   const header = rows[0].map((h) => h.trim().toLowerCase());
   const required = ['name', 'email', 'employeecode', 'department', 'joiningdate', 'basicsalary'];
   const errors = [];
-  const seenCodes = new Set(); const seenEmails = new Set();
+  const seenCodes = new Set();
+  const seenEmails = new Set();
   const departments = await Department.find();
   const deptByName = new Map(departments.map((d) => [d.name.toLowerCase(), d]));
   const designations = await Designation.find();
@@ -172,9 +207,14 @@ async function validateImportRows(csvText) {
   for (let i = 1; i < rows.length; i += 1) {
     const rowNum = i + 1; // 1-based including header
     const obj = {};
-    header.forEach((h, idx) => { obj[h] = (rows[i][idx] || '').trim(); });
+    header.forEach((h, idx) => {
+      obj[h] = (rows[i][idx] || '').trim();
+    });
     let rowOk = true;
-    const add = (field, reason) => { errors.push({ row: rowNum, field, reason }); rowOk = false; };
+    const add = (field, reason) => {
+      errors.push({ row: rowNum, field, reason });
+      rowOk = false;
+    };
     for (const f of required) if (!obj[f]) add(f, 'Required field is missing');
     if (obj.email && !/^\S+@\S+\.\S+$/.test(obj.email)) add('email', 'Invalid email format');
     if (obj.email) {
@@ -226,29 +266,56 @@ export const importEmployees = asyncHandler(async (req, res) => {
   for (const row of validRows) {
     try {
       const user = await User.create({
-        name: row.name, email: row.email,
+        name: row.name,
+        email: row.email,
         password: crypto.randomBytes(12).toString('base64').slice(0, 16),
-        role: 'EMPLOYEE', mustChangePassword: true,
+        role: 'EMPLOYEE',
+        mustChangePassword: true,
       });
       try {
         const employee = await Employee.create({
-          user: user._id, employeeCode: row.employeeCode, department: row.department,
-          designation: row.designation, phone: row.phone, address: row.address,
-          joiningDate: row.joiningDate, basicSalary: row.basicSalary,
+          user: user._id,
+          employeeCode: row.employeeCode,
+          department: row.department,
+          designation: row.designation,
+          phone: row.phone,
+          address: row.address,
+          joiningDate: row.joiningDate,
+          basicSalary: row.basicSalary,
         });
-        await writeAudit(req, 'CREATE', 'Employee', employee._id, null, { employeeCode: row.employeeCode, email: row.email, source: 'csv-import' });
+        await writeAudit(req, 'CREATE', 'Employee', employee._id, null, {
+          employeeCode: row.employeeCode,
+          email: row.email,
+          source: 'csv-import',
+        });
         results.push({ row: row.row, employeeCode: row.employeeCode, email: row.email, status: 'created' });
       } catch (e) {
         await User.deleteOne({ _id: user._id });
-        results.push({ row: row.row, employeeCode: row.employeeCode, email: row.email, status: 'failed', reason: 'Could not create employee record' });
+        results.push({
+          row: row.row,
+          employeeCode: row.employeeCode,
+          email: row.email,
+          status: 'failed',
+          reason: 'Could not create employee record',
+        });
       }
     } catch (e) {
-      results.push({ row: row.row, employeeCode: row.employeeCode, email: row.email, status: 'failed', reason: 'Could not create login' });
+      results.push({
+        row: row.row,
+        employeeCode: row.employeeCode,
+        email: row.email,
+        status: 'failed',
+        reason: 'Could not create login',
+      });
     }
   }
   const created = results.filter((r) => r.status === 'created').length;
   res.status(200).json({
-    success: true, totalRows, createdRows: created, failedRows: results.filter((r) => r.status === 'failed').length,
-    errors, results,
+    success: true,
+    totalRows,
+    createdRows: created,
+    failedRows: results.filter((r) => r.status === 'failed').length,
+    errors,
+    results,
   });
 });

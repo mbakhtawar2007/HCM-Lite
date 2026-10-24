@@ -18,11 +18,19 @@
   "private": true,
   "scripts": {
     "dev": "node --watch src/server.js",
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "test": "node test-p1.mjs && node test-p2.mjs && node test-p3.mjs && node test-p4.mjs && node test-demo.mjs && node test-phase1.mjs && node test-phase2.mjs && node test-phase3.mjs && node test-phase5.mjs",
+    "lint": "eslint .",
+    "format": "prettier --write \"src/**/*.js\" \"test-*.mjs\"",
+    "format:check": "prettier --check \"src/**/*.js\" \"test-*.mjs\""
   },
   "type": "module",
   "version": "1.0.0",
   "devDependencies": {
-    "mongodb-memory-server": "^11.3.0"
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.13.0",
+    "globals": "^17.13.0",
+    "mongodb-memory-server": "^11.3.0",
+    "prettier": "^3.9.10"
   }
 }

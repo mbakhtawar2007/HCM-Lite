@@ -47,7 +47,15 @@ import { Announcement } from '../models/Announcement.js';
 import { LeaveType } from '../models/LeaveType.js';
 import { PayrollRun } from '../models/PayrollRun.js';
 import { computeAttendanceStatus } from './attendanceService.js';
-import { dateKey, dayStart, getSetting, isHoliday, isWeekend, workingDaysInYear } from './settingsService.js';
+import {
+  dateKey,
+  dayStart,
+  getSetting,
+  isHoliday,
+  isWeekend,
+  workingDaysInYear,
+  yearBounds,
+} from './settingsService.js';
 
 const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
 const rate = (num, den) => (den > 0 ? round2(num / den) : null);
@@ -60,9 +68,7 @@ export function parseRange(query) {
   if (from && !DATE_RE.test(from)) throw new ApiError(400, 'from must be YYYY-MM-DD');
   if (to && !DATE_RE.test(to)) throw new ApiError(400, 'to must be YYYY-MM-DD');
   const toDate = to ? dayStart(to) : dayStart(new Date());
-  const fromDate = from
-    ? dayStart(from)
-    : new Date(Date.UTC(toDate.getUTCFullYear(), toDate.getUTCMonth(), 1));
+  const fromDate = from ? dayStart(from) : new Date(Date.UTC(toDate.getUTCFullYear(), toDate.getUTCMonth(), 1));
   if (fromDate > toDate) throw new ApiError(400, 'from must be on or before to');
   return { from: fromDate, to: toDate };
 }
@@ -95,10 +101,7 @@ function activeMatch(date, departmentId) {
 
 // Headcount via aggregation ($match + $count), not a JS filter.
 export async function headcountAt(date, departmentId) {
-  const rows = await Employee.aggregate([
-    { $match: activeMatch(date, departmentId) },
-    { $count: 'n' },
-  ]);
+  const rows = await Employee.aggregate([{ $match: activeMatch(date, departmentId) }, { $count: 'n' }]);
   return rows[0]?.n || 0;
 }
 
@@ -137,7 +140,9 @@ export async function analyseAttendance(from, to, departmentId, setting, holiday
     recByEmpDay.set(`${r.employee}|${dateKey(r.date)}`, r);
   }
   const approvedLeaves = await LeaveRequest.find({
-    status: 'APPROVED', startDate: { $lte: dayStart(to) }, endDate: { $gte: dayStart(from) },
+    status: 'APPROVED',
+    startDate: { $lte: dayStart(to) },
+    endDate: { $gte: dayStart(from) },
   });
   const leaveDays = new Map(); // employeeId -> Set<dateKey> (working days only)
   for (const lr of approvedLeaves) {
@@ -146,7 +151,12 @@ export async function analyseAttendance(from, to, departmentId, setting, holiday
     const last = dayStart(lr.endDate);
     while (cur <= last) {
       const k = dateKey(cur);
-      if (cur >= dayStart(from) && cur <= dayStart(to) && !isWeekend(cur, setting.weekendDays) && !isHoliday(cur, holidays)) {
+      if (
+        cur >= dayStart(from) &&
+        cur <= dayStart(to) &&
+        !isWeekend(cur, setting.weekendDays) &&
+        !isHoliday(cur, holidays)
+      ) {
         if (!leaveDays.has(String(lr.employee))) leaveDays.set(String(lr.employee), new Set());
         leaveDays.get(String(lr.employee)).add(k);
       }
@@ -165,43 +175,69 @@ export async function analyseAttendance(from, to, departmentId, setting, holiday
       if (!isActiveOn(emp, day)) continue;
       const deptName = emp.department?.name || 'Unassigned';
       if (!byDept.has(deptName)) {
-        byDept.set(deptName, { department: deptName, present: 0, late: 0, halfDay: 0, missingCheckout: 0, absent: 0, onLeave: 0, slots: 0 });
+        byDept.set(deptName, {
+          department: deptName,
+          present: 0,
+          late: 0,
+          halfDay: 0,
+          missingCheckout: 0,
+          absent: 0,
+          onLeave: 0,
+          slots: 0,
+        });
       }
       const d = byDept.get(deptName);
-      totals.slots += 1; d.slots += 1;
+      totals.slots += 1;
+      d.slots += 1;
       if (leaveDays.get(String(emp._id))?.has(k)) {
-        totals.onLeave += 1; d.onLeave += 1; dayTotals.onLeave += 1; continue;
+        totals.onLeave += 1;
+        d.onLeave += 1;
+        dayTotals.onLeave += 1;
+        continue;
       }
       const rec = recByEmpDay.get(`${emp._id}|${k}`);
       if (!rec) {
-        totals.absent += 1; d.absent += 1; dayTotals.absent += 1; continue;
+        totals.absent += 1;
+        d.absent += 1;
+        dayTotals.absent += 1;
+        continue;
       }
       const status = computeAttendanceStatus(rec, setting);
       if (status === 'LATE') {
-        totals.late += 1; d.late += 1; dayTotals.late += 1;
+        totals.late += 1;
+        d.late += 1;
+        dayTotals.late += 1;
         if (!lateCounts.has(String(emp._id))) lateCounts.set(String(emp._id), { employee: emp, lateDays: 0 });
         lateCounts.get(String(emp._id)).lateDays += 1;
       } else if (status === 'HALF_DAY') {
-        totals.halfDay += 1; d.halfDay += 1; dayTotals.halfDay += 1;
+        totals.halfDay += 1;
+        d.halfDay += 1;
+        dayTotals.halfDay += 1;
       } else if (status === 'MISSING_CHECKOUT') {
-        totals.missingCheckout += 1; d.missingCheckout += 1; dayTotals.missingCheckout += 1;
+        totals.missingCheckout += 1;
+        d.missingCheckout += 1;
+        dayTotals.missingCheckout += 1;
       } else {
-        totals.present += 1; d.present += 1; dayTotals.present += 1;
+        totals.present += 1;
+        d.present += 1;
+        dayTotals.present += 1;
       }
     }
     trend.push(dayTotals);
   }
 
   const dueSlots = totals.slots - totals.onLeave;
-  const absenteeism = [...byDept.values()].map((d) => {
-    const due = d.slots - d.onLeave;
-    return {
-      department: d.department,
-      absentDays: d.absent,
-      expectedWorkingDays: due,
-      absenteeismRate: rate(d.absent, due),
-    };
-  }).sort((a, b) => a.department.localeCompare(b.department));
+  const absenteeism = [...byDept.values()]
+    .map((d) => {
+      const due = d.slots - d.onLeave;
+      return {
+        department: d.department,
+        absentDays: d.absent,
+        expectedWorkingDays: due,
+        absenteeismRate: rate(d.absent, due),
+      };
+    })
+    .sort((a, b) => a.department.localeCompare(b.department));
 
   const topLateComers = [...lateCounts.values()]
     .map(({ employee, lateDays }) => ({
@@ -217,10 +253,7 @@ export async function analyseAttendance(from, to, departmentId, setting, holiday
   return {
     ...totals,
     workingDays: workingDays.length,
-    attendanceRate: rate(
-      totals.present + totals.late + totals.missingCheckout + totals.halfDay * 0.5,
-      dueSlots,
-    ),
+    attendanceRate: rate(totals.present + totals.late + totals.missingCheckout + totals.halfDay * 0.5, dueSlots),
     lateRate: rate(totals.late, totals.present + totals.late),
     absenteeismByDepartment: absenteeism,
     trend,
@@ -236,7 +269,9 @@ export async function analyseLeave(from, to, departmentId, setting, holidays) {
   const employees = await employeesActiveInRange(departmentId);
   const empById = new Map(employees.map((e) => [String(e._id), e]));
   const approved = await LeaveRequest.find({
-    status: 'APPROVED', startDate: { $lte: dayStart(to) }, endDate: { $gte: dayStart(from) },
+    status: 'APPROVED',
+    startDate: { $lte: dayStart(to) },
+    endDate: { $gte: dayStart(from) },
   });
   const byType = new Map(types.map((t) => [String(t._id), { leaveType: t, approvedDays: 0 }]));
   const byDeptType = new Map();
@@ -247,14 +282,21 @@ export async function analyseLeave(from, to, departmentId, setting, holidays) {
     const cur = dayStart(lr.startDate);
     const last = dayStart(lr.endDate);
     while (cur <= last) {
-      if (cur >= dayStart(from) && cur <= dayStart(to) && !isWeekend(cur, setting.weekendDays) && !isHoliday(cur, holidays)) days += 1;
+      if (
+        cur >= dayStart(from) &&
+        cur <= dayStart(to) &&
+        !isWeekend(cur, setting.weekendDays) &&
+        !isHoliday(cur, holidays)
+      )
+        days += 1;
       cur.setUTCDate(cur.getUTCDate() + 1);
     }
     if (!byType.has(String(lr.leaveType))) byType.set(String(lr.leaveType), { leaveType: null, approvedDays: 0 });
     byType.get(String(lr.leaveType)).approvedDays += days;
     const deptName = emp.department?.name || 'Unassigned';
     const key = `${deptName}|${lr.leaveType}`;
-    if (!byDeptType.has(key)) byDeptType.set(key, { department: deptName, leaveTypeId: String(lr.leaveType), approvedDays: 0 });
+    if (!byDeptType.has(key))
+      byDeptType.set(key, { department: deptName, leaveTypeId: String(lr.leaveType), approvedDays: 0 });
     byDeptType.get(key).approvedDays += days;
   }
   const typeById = new Map(types.map((t) => [String(t._id), t]));
@@ -266,15 +308,21 @@ export async function analyseLeave(from, to, departmentId, setting, holidays) {
       approvedDays: b.approvedDays,
       utilization: b.leaveType.isUnlimited ? null : rate(b.approvedDays, b.leaveType.yearlyQuota),
     }));
-  const byDeptOut = [...byDeptType.values()].map((b) => {
-    const t = typeById.get(b.leaveTypeId);
-    return {
-      department: b.department,
-      leaveType: t || null,
-      approvedDays: b.approvedDays,
-      utilization: !t || t.isUnlimited ? null : rate(b.approvedDays, t.yearlyQuota),
-    };
-  }).sort((a, b) => a.department.localeCompare(b.department) || String(a.leaveType?.code || '').localeCompare(String(b.leaveType?.code || '')));
+  const byDeptOut = [...byDeptType.values()]
+    .map((b) => {
+      const t = typeById.get(b.leaveTypeId);
+      return {
+        department: b.department,
+        leaveType: t || null,
+        approvedDays: b.approvedDays,
+        utilization: !t || t.isUnlimited ? null : rate(b.approvedDays, t.yearlyQuota),
+      };
+    })
+    .sort(
+      (a, b) =>
+        a.department.localeCompare(b.department) ||
+        String(a.leaveType?.code || '').localeCompare(String(b.leaveType?.code || '')),
+    );
   return { byType: byTypeOut, byDepartment: byDeptOut };
 }
 
@@ -293,22 +341,57 @@ export async function analysePayroll(from, to, departmentId) {
   if (departmentId) base.push({ $match: { 'emp.department': new mongoose.Types.ObjectId(departmentId) } });
   const [totals] = await PayrollRun.aggregate([
     ...base,
-    { $group: { _id: null, payrollCost: { $sum: '$lines.netPay' }, grossPayable: { $sum: '$lines.grossPayable' }, lines: { $sum: 1 } } },
+    {
+      $group: {
+        _id: null,
+        payrollCost: { $sum: '$lines.netPay' },
+        grossPayable: { $sum: '$lines.grossPayable' },
+        lines: { $sum: 1 },
+      },
+    },
   ]);
   const byDepartment = await PayrollRun.aggregate([
     ...base,
     { $lookup: { from: 'departments', localField: 'emp.department', foreignField: '_id', as: 'dept' } },
     { $unwind: { path: '$dept', preserveNullAndEmptyArrays: true } },
-    { $group: { _id: { $ifNull: ['$dept.name', 'Unassigned'] }, payrollCost: { $sum: '$lines.netPay' }, grossPayable: { $sum: '$lines.grossPayable' }, employees: { $sum: 1 } } },
+    {
+      $group: {
+        _id: { $ifNull: ['$dept.name', 'Unassigned'] },
+        payrollCost: { $sum: '$lines.netPay' },
+        grossPayable: { $sum: '$lines.grossPayable' },
+        employees: { $sum: 1 },
+      },
+    },
     { $sort: { payrollCost: -1 } },
-  ]).then((rows) => rows.map((r) => ({ department: r._id, payrollCost: round2(r.payrollCost), grossPayable: round2(r.grossPayable), employees: r.employees })));
+  ]).then((rows) =>
+    rows.map((r) => ({
+      department: r._id,
+      payrollCost: round2(r.payrollCost),
+      grossPayable: round2(r.grossPayable),
+      employees: r.employees,
+    })),
+  );
   const byDesignation = await PayrollRun.aggregate([
     ...base,
     { $lookup: { from: 'designations', localField: 'emp.designation', foreignField: '_id', as: 'des' } },
     { $unwind: { path: '$des', preserveNullAndEmptyArrays: true } },
-    { $group: { _id: { $ifNull: ['$des.name', 'Unassigned'] }, payrollCost: { $sum: '$lines.netPay' }, grossPayable: { $sum: '$lines.grossPayable' }, employees: { $sum: 1 } } },
+    {
+      $group: {
+        _id: { $ifNull: ['$des.name', 'Unassigned'] },
+        payrollCost: { $sum: '$lines.netPay' },
+        grossPayable: { $sum: '$lines.grossPayable' },
+        employees: { $sum: 1 },
+      },
+    },
     { $sort: { payrollCost: -1 } },
-  ]).then((rows) => rows.map((r) => ({ designation: r._id, payrollCost: round2(r.payrollCost), grossPayable: round2(r.grossPayable), employees: r.employees })));
+  ]).then((rows) =>
+    rows.map((r) => ({
+      designation: r._id,
+      payrollCost: round2(r.payrollCost),
+      grossPayable: round2(r.grossPayable),
+      employees: r.employees,
+    })),
+  );
   return {
     payrollCost: round2(totals?.payrollCost || 0),
     grossPayable: round2(totals?.grossPayable || 0),
@@ -324,7 +407,13 @@ async function headcountByGroup(date, departmentId, groupField, collection, labe
     { $match: activeMatch(date, departmentId) },
     { $lookup: { from: collection, localField: groupField, foreignField: '_id', as: 'g' } },
     { $unwind: { path: '$g', preserveNullAndEmptyArrays: true } },
-    { $group: { _id: { $ifNull: [`$g.${labelKey}`, 'Unassigned'] }, count: { $sum: 1 }, averageBasicSalary: { $avg: '$basicSalary' } } },
+    {
+      $group: {
+        _id: { $ifNull: [`$g.${labelKey}`, 'Unassigned'] },
+        count: { $sum: 1 },
+        averageBasicSalary: { $avg: '$basicSalary' },
+      },
+    },
     { $sort: { count: -1 } },
   ]);
   return rows.map((r) => ({ name: r._id, count: r.count, averageBasicSalary: round2(r.averageBasicSalary || 0) }));
@@ -352,11 +441,13 @@ export async function getAdminDashboard(query) {
   const { from, to } = parseRange(query);
   const dept = await resolveDepartment(query.department);
   const departmentId = dept?._id || null;
-  const setting = await getSetting();
-  const holidays = await Holiday.find();
+  // getSetting() is kept for its default-row side effect only; this
+  // dashboard does not use setting/holidays (analysePayroll fetches its
+  // own). The unused Holiday fetch was removed in Phase 5.
+  await getSetting();
   const headcountEnd = await headcountAt(to, departmentId);
   const headcountStart = await headcountAt(from, departmentId);
-  const yearStart = new Date(Date.UTC(to.getUTCFullYear(), 0, 1));
+  const { start: yearStart } = yearBounds(to.getUTCFullYear());
   const exitsMatch = {
     leavingDate: { $gte: yearStart, $lte: to },
     ...(departmentId ? { department: departmentId } : {}),
@@ -367,7 +458,9 @@ export async function getAdminDashboard(query) {
   const headcountYearStart = await headcountAt(yearStart, departmentId);
   const avgHeadcount = (headcountYearStart + headcountEnd) / 2;
   const payroll = await analysePayroll(from, to, departmentId);
-  const activeAtEnd = await Employee.find(activeMatch(to, departmentId)).populate('department', 'name').populate('designation', 'name');
+  const activeAtEnd = await Employee.find(activeMatch(to, departmentId))
+    .populate('department', 'name')
+    .populate('designation', 'name');
   const avgSalaryRows = await Employee.aggregate([
     { $match: activeMatch(to, departmentId) },
     { $group: { _id: null, avg: { $avg: '$basicSalary' } } },
@@ -389,7 +482,10 @@ export async function getAdminDashboard(query) {
     headcountByDesignation: await headcountByGroup(to, departmentId, 'designation', 'designations', 'name'),
     payrollCostByDesignation: payroll.byDesignation,
     tenureDistribution: tenureBuckets(activeAtEnd, to),
-    announcements: await Announcement.find({ isActive: true }).sort({ createdAt: -1 }).limit(10).populate('postedBy', 'name email role'),
+    announcements: await Announcement.find({ isActive: true })
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .populate('postedBy', 'name email role'),
     announcementsAvailable: true,
     // Employee has no gender field: a gender breakdown would be invented
     // data, so it is honestly reported as not collected.
@@ -413,14 +509,24 @@ export async function getHrDashboard(query) {
   const todayEmployees = (await employeesActiveInRange(departmentId)).filter((e) => isActiveOn(e, today));
   const todayRecords = await Attendance.find({ date: today });
   const recByEmp = new Map(todayRecords.map((r) => [String(r.employee), r]));
-  const todayLeaves = await LeaveRequest.find({ status: 'APPROVED', startDate: { $lte: today }, endDate: { $gte: today } });
+  const todayLeaves = await LeaveRequest.find({
+    status: 'APPROVED',
+    startDate: { $lte: today },
+    endDate: { $gte: today },
+  });
   const todayLeaveIds = new Set(todayLeaves.map((l) => String(l.employee)));
   const isWorkingToday = !isWeekend(today, setting.weekendDays) && !isHoliday(today, holidays);
   const todaySummary = { present: 0, late: 0, halfDay: 0, missingCheckout: 0, onLeave: 0, absent: 0, checkedIn: 0 };
   for (const emp of todayEmployees) {
-    if (todayLeaveIds.has(String(emp._id))) { todaySummary.onLeave += 1; continue; }
+    if (todayLeaveIds.has(String(emp._id))) {
+      todaySummary.onLeave += 1;
+      continue;
+    }
     const rec = recByEmp.get(String(emp._id));
-    if (!rec) { if (isWorkingToday) todaySummary.absent += 1; continue; }
+    if (!rec) {
+      if (isWorkingToday) todaySummary.absent += 1;
+      continue;
+    }
     todaySummary.checkedIn += 1;
     const status = computeAttendanceStatus(rec, setting);
     if (status === 'LATE') todaySummary.late += 1;
@@ -429,14 +535,17 @@ export async function getHrDashboard(query) {
     else todaySummary.present += 1;
   }
   const pendingLeaves = await LeaveRequest.find({ status: 'PENDING' })
-    .populate('leaveType', 'name code').populate({ path: 'employee', populate: { path: 'user', select: 'name email' } })
-    .sort({ createdAt: -1 }).limit(20);
+    .populate('leaveType', 'name code')
+    .populate({ path: 'employee', populate: { path: 'user', select: 'name email' } })
+    .sort({ createdAt: -1 })
+    .limit(20);
   const pendingLeavesFiltered = departmentId
     ? pendingLeaves.filter((l) => String(l.employee?.department) === String(departmentId))
     : pendingLeaves;
   const pendingCorrections = await AttendanceCorrection.find({ status: 'PENDING' })
     .populate({ path: 'employee', populate: { path: 'user', select: 'name email' } })
-    .sort({ createdAt: -1 }).limit(20);
+    .sort({ createdAt: -1 })
+    .limit(20);
   const pendingCorrectionsFiltered = departmentId
     ? pendingCorrections.filter((c) => String(c.employee?.department) === String(departmentId))
     : pendingCorrections;
@@ -452,15 +561,22 @@ export async function getHrDashboard(query) {
     attendanceRate: attendance.attendanceRate,
     lateRate: attendance.lateRate,
     attendanceTotals: {
-      present: attendance.present, late: attendance.late, halfDay: attendance.halfDay,
-      missingCheckout: attendance.missingCheckout, absent: attendance.absent, onLeave: attendance.onLeave,
+      present: attendance.present,
+      late: attendance.late,
+      halfDay: attendance.halfDay,
+      missingCheckout: attendance.missingCheckout,
+      absent: attendance.absent,
+      onLeave: attendance.onLeave,
       workingDays: attendance.workingDays,
     },
     absenteeismByDepartment: attendance.absenteeismByDepartment,
     leaveByType: leave.byType,
     leaveByDepartment: leave.byDepartment,
     topLateComers: attendance.topLateComers,
-    announcements: await Announcement.find({ isActive: true }).sort({ createdAt: -1 }).limit(10).populate('postedBy', 'name email role'),
+    announcements: await Announcement.find({ isActive: true })
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .populate('postedBy', 'name email role'),
     announcementsAvailable: true,
     aiSummary: { available: false, status: 'coming-soon', summary: null },
   };
@@ -474,14 +590,23 @@ export async function getEmployeeDashboard(employee, query) {
   const todayRecord = await Attendance.findOne({ employee: employee._id, date: today });
   let todayStatus;
   if (todayRecord) todayStatus = computeAttendanceStatus(todayRecord, setting);
-  else if (await LeaveRequest.findOne({ employee: employee._id, status: 'APPROVED', startDate: { $lte: today }, endDate: { $gte: today } })) todayStatus = 'ON_LEAVE';
+  else if (
+    await LeaveRequest.findOne({
+      employee: employee._id,
+      status: 'APPROVED',
+      startDate: { $lte: today },
+      endDate: { $gte: today },
+    })
+  )
+    todayStatus = 'ON_LEAVE';
   else if (isWeekend(today, setting.weekendDays) || isHoliday(today, holidays)) todayStatus = 'WEEKEND_OR_HOLIDAY';
   else todayStatus = 'ABSENT';
   // Week hours: Monday–Sunday (UTC) week containing today; only
   // completed check-in/out durations count.
   const monday = new Date(today);
   monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7));
-  const sunday = new Date(monday); sunday.setUTCDate(sunday.getUTCDate() + 6);
+  const sunday = new Date(monday);
+  sunday.setUTCDate(sunday.getUTCDate() + 6);
   const weekRecords = await Attendance.find({ employee: employee._id, date: { $gte: monday, $lte: sunday } });
   let weekMinutes = 0;
   for (const r of weekRecords) {
@@ -493,39 +618,65 @@ export async function getEmployeeDashboard(employee, query) {
   // working days actually falling in the current year count (Phase 1
   // fix — a cross-year leave was previously charged in full here too).
   const year = today.getUTCFullYear();
-  const yearStart = new Date(Date.UTC(year, 0, 1));
-  const yearEnd = new Date(Date.UTC(year, 11, 31));
+  const { start: yearStart, end: yearEnd } = yearBounds(year);
   const types = await LeaveType.find().sort({ code: 1 });
   const balances = [];
   for (const t of types) {
     const approved = await LeaveRequest.find({
-      employee: employee._id, leaveType: t._id, status: 'APPROVED',
-      startDate: { $lte: yearEnd }, endDate: { $gte: yearStart },
+      employee: employee._id,
+      leaveType: t._id,
+      status: 'APPROVED',
+      startDate: { $lte: yearEnd },
+      endDate: { $gte: yearStart },
     });
-    const used = approved.reduce((s, l) => s + workingDaysInYear(l.startDate, l.endDate, year, holidays, setting.weekendDays), 0);
+    const used = approved.reduce(
+      (s, l) => s + workingDaysInYear(l.startDate, l.endDate, year, holidays, setting.weekendDays),
+      0,
+    );
     const pendingReqs = await LeaveRequest.find({
-      employee: employee._id, leaveType: t._id, status: 'PENDING',
-      startDate: { $lte: yearEnd }, endDate: { $gte: yearStart },
+      employee: employee._id,
+      leaveType: t._id,
+      status: 'PENDING',
+      startDate: { $lte: yearEnd },
+      endDate: { $gte: yearStart },
     });
-    const pending = pendingReqs.reduce((s, l) => s + workingDaysInYear(l.startDate, l.endDate, year, holidays, setting.weekendDays), 0);
+    const pending = pendingReqs.reduce(
+      (s, l) => s + workingDaysInYear(l.startDate, l.endDate, year, holidays, setting.weekendDays),
+      0,
+    );
     balances.push({
-      leaveType: t, quota: t.isUnlimited ? null : t.yearlyQuota, used, pending,
+      leaveType: t,
+      quota: t.isUnlimited ? null : t.yearlyQuota,
+      used,
+      pending,
       remaining: t.isUnlimited ? null : Math.max(0, t.yearlyQuota - used),
     });
   }
   const lastRun = await PayrollRun.findOne({ status: 'FINALIZED', 'lines.employee': employee._id }).sort({ month: -1 });
   const lastPayslip = lastRun
-    ? { month: lastRun.month, runId: lastRun._id, ...(lastRun.lines.find((l) => String(l.employee) === String(employee._id))?.toObject() || {}) }
+    ? {
+        month: lastRun.month,
+        runId: lastRun._id,
+        ...(lastRun.lines.find((l) => String(l.employee) === String(employee._id))?.toObject() || {}),
+      }
     : null;
   return {
     filters: { from: dateKey(from), to: dateKey(to) },
     employee,
-    today: { date: dateKey(today), status: todayStatus, checkIn: todayRecord?.checkIn || null, checkOut: todayRecord?.checkOut || null },
+    today: {
+      date: dateKey(today),
+      status: todayStatus,
+      checkIn: todayRecord?.checkIn || null,
+      checkOut: todayRecord?.checkOut || null,
+    },
     week: { start: dateKey(monday), end: dateKey(sunday), hours: round2(weekMinutes / 60), targetHours: 40 },
     lateCount,
     leaveBalances: balances,
     lastPayslip,
-    announcements: await Announcement.find({ isActive: true }).sort({ createdAt: -1 }).limit(10).populate('postedBy', 'name email role'),
+    announcements: await Announcement.find({ isActive: true })
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .populate('postedBy', 'name email role'),
     announcementsAvailable: true,
     askAssistant: { available: false, status: 'coming-soon' },
   };
