@@ -12,14 +12,15 @@ export default function AuditPage() {
   const [total, setTotal] = useState(0);
   const [filters, setFilters] = useState({ entity: '', action: '', actor: '', from: '', to: '' });
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
   const load = async (p = page) => {
-    setError('');
+    setError(''); setLoading(true);
     try {
       const params = { page: p, limit: 50 };
       for (const [k, v] of Object.entries(filters)) if (v) params[k] = v;
       const d = await listAuditLogs(params);
       setLogs(d.logs); setPages(d.pages || 1); setTotal(d.total || 0); setPage(d.page || p);
-    } catch (e) { setError(getErrorMessage(e)); }
+    } catch (e) { setError(getErrorMessage(e)); } finally { setLoading(false); }
   };
   useEffect(() => { load(1); }, []);
   const set = (k) => (e) => setFilters((f) => ({ ...f, [k]: e.target.value }));
@@ -42,7 +43,8 @@ export default function AuditPage() {
         <ul className="item-list">{logs.map((l) => (
           <li key={l._id}><span><strong>{l.action}</strong> {l.entity} · {l.actor?.email || 'system'} · {new Date(l.createdAt).toLocaleString()}</span></li>
         ))}
-        {logs.length === 0 && <li className="muted">No audit entries match these filters.</li>}</ul>
+        {loading && <li className="muted">Loading…</li>}
+        {!loading && logs.length === 0 && <li className="muted">No audit entries match these filters.</li>}</ul>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <Button variant="ghost" disabled={page <= 1} onClick={() => load(page - 1)}>Previous</Button>
           <Button variant="ghost" disabled={page >= pages} onClick={() => load(page + 1)}>Next</Button>

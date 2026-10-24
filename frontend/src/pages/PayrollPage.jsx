@@ -15,9 +15,11 @@ export default function PayrollPage() {
   const [month, setMonth] = useState('');
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
+  const [loading, setLoading] = useState(true);
   const load = () => {
-    if (isStaff) listPayrollRuns().then((d) => setRuns(d.runs)).catch((e) => setError(getErrorMessage(e)));
-    else myPayslips().then((d) => setMine(d.payslips)).catch((e) => setError(getErrorMessage(e)));
+    setLoading(true);
+    if (isStaff) listPayrollRuns().then((d) => setRuns(d.runs)).catch((e) => setError(getErrorMessage(e))).finally(() => setLoading(false));
+    else myPayslips().then((d) => setMine(d.payslips)).catch((e) => setError(getErrorMessage(e))).finally(() => setLoading(false));
   };
   useEffect(load, []);
   const open = async (id) => { try { setSelected(await getPayrollRun(id)); } catch (err) { setError(getErrorMessage(err)); } };
@@ -40,7 +42,7 @@ export default function PayrollPage() {
             </form>
           </Card>
           <Card title="Payroll runs">
-            <ul className="item-list">{runs.map((r) => (
+            <ul className="item-list">{loading && <li className="muted">Loading…</li>}{!loading && runs.length === 0 && <li className="muted">No payroll runs yet.</li>}{runs.map((r) => (
               <li key={r._id}><span><strong>{r.month}</strong> · {r.status} · {r.lines.length} employees</span><span><Button variant="ghost" onClick={() => open(r._id)}>View</Button> {user?.role === 'ADMIN' && r.status === 'DRAFT' && <Button variant="ghost" onClick={async () => { try { await finalizePayrollRun(r._id); setMsg('Finalized and locked.'); load(); } catch (err) { setError(getErrorMessage(err)); } }}>Finalize</Button>}</span></li>
             ))}</ul>
           </Card>
@@ -57,7 +59,8 @@ export default function PayrollPage() {
           <ul className="item-list">{mine.map((p, i) => (
             <li key={i}><span><strong>{p.month}</strong> · Net Rs {p.netPay} · Gross payable Rs {p.grossPayable} · Tax Rs {p.tax}</span><Button variant="ghost" onClick={() => downloadPayslipPdf(p.runId, p.employee, p.month)}>PDF</Button></li>
           ))}
-          {mine.length === 0 && <li className="muted">No finalized payslips yet.</li>}</ul>
+          {loading && <li className="muted">Loading…</li>}
+          {!loading && mine.length === 0 && <li className="muted">No finalized payslips yet.</li>}</ul>
         </Card>
       )}
     </>

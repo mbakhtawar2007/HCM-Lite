@@ -7,7 +7,8 @@ import { getErrorMessage } from '../utils/errors.js';
 export default function NotificationsPage() {
   const [data, setData] = useState({ notifications: [], unreadCount: 0 });
   const [error, setError] = useState('');
-  const load = () => listNotifications().then(setData).catch((e) => setError(getErrorMessage(e)));
+  const [loading, setLoading] = useState(true);
+  const load = () => { setLoading(true); listNotifications().then(setData).catch((e) => setError(getErrorMessage(e))).finally(() => setLoading(false)); };
   useEffect(load, []);
   return (
     <>
@@ -17,7 +18,8 @@ export default function NotificationsPage() {
         <ul className="item-list">{data.notifications.map((n) => (
           <li key={n._id}><span><strong>{n.title}</strong> · {n.message}</span>{!n.isRead && <Button variant="ghost" onClick={async () => { await markNotificationRead(n._id); load(); }}>Mark read</Button>}</li>
         ))}
-        {data.notifications.length === 0 && <li className="muted">No notifications.</li>}</ul>
+        {loading && <li className="muted">Loading…</li>}
+        {!loading && data.notifications.length === 0 && <li className="muted">No notifications.</li>}</ul>
       </Card>
     </>
   );

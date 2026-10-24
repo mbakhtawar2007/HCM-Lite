@@ -14,8 +14,9 @@ export default function Employees() {
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
   const [dryRun, setDryRun] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ name: '', email: '', password: '', employeeCode: '', department: '', designation: '', joiningDate: '', basicSalary: '' });
-  const load = () => listEmployees({ q }).then((d) => setEmployees(d.employees)).catch((e) => setError(getErrorMessage(e)));
+  const load = () => { setLoading(true); listEmployees({ q }).then((d) => setEmployees(d.employees)).catch((e) => setError(getErrorMessage(e))).finally(() => setLoading(false)); };
   useEffect(() => { orgList('departments').then((d) => setDepartments(d.items)).catch(() => {}); orgList('designations').then((d) => setDesignations(d.items)).catch(() => {}); }, []);
   useEffect(load, [q]);
   const submit = async (e) => {
@@ -64,7 +65,8 @@ export default function Employees() {
           {employees.map((em) => (
             <li key={em._id}><span><strong>{em.user?.name}</strong> · {em.employeeCode} · {em.department?.name} · Rs {em.basicSalary}</span><Link to={`/employees/${em._id}`}>View 360</Link></li>
           ))}
-          {employees.length === 0 && <li className="muted">No employees yet.</li>}
+          {loading && <li className="muted">Loading…</li>}
+          {!loading && employees.length === 0 && <li className="muted">No employees yet.</li>}
         </ul>
       </Card>
     </>

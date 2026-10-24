@@ -9,8 +9,9 @@ export default function Users() {
   const [users, setUsers] = useState([]);
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
+  const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'HR' });
-  const load = () => listUsers().then((d) => setUsers(d.users)).catch((e) => setError(getErrorMessage(e)));
+  const load = () => { setLoading(true); listUsers().then((d) => setUsers(d.users)).catch((e) => setError(getErrorMessage(e))).finally(() => setLoading(false)); };
   useEffect(load, []);
   const submit = async (e) => {
     e.preventDefault(); setError(''); setMsg('');
@@ -43,7 +44,8 @@ export default function Users() {
           {users.map((u) => (
             <li key={u._id}><span><strong>{u.name}</strong> · {u.email} · {u.role} · {u.isActive ? 'Active' : 'Deactivated'}{u.mustChangePassword ? ' · Must change password' : ''}</span><span><Button variant="ghost" onClick={() => toggle(u)}>{u.isActive ? 'Deactivate' : 'Activate'}</Button> <Button variant="ghost" onClick={() => reset(u)}>Reset password</Button></span></li>
           ))}
-          {users.length === 0 && <li className="muted">No users yet.</li>}
+          {loading && <li className="muted">Loading…</li>}
+          {!loading && users.length === 0 && <li className="muted">No users yet.</li>}
         </ul>
       </Card>
     </>

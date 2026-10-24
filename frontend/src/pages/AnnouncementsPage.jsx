@@ -14,7 +14,8 @@ export default function AnnouncementsPage() {
   const [body, setBody] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
-  const load = () => listAnnouncements().then((d) => setAnnouncements(d.announcements)).catch((e) => setError(getErrorMessage(e)));
+  const [loading, setLoading] = useState(true);
+  const load = () => { setLoading(true); listAnnouncements().then((d) => setAnnouncements(d.announcements)).catch((e) => setError(getErrorMessage(e))).finally(() => setLoading(false)); };
   useEffect(load, []);
   const post = async (e) => {
     e.preventDefault(); setError(''); setMessage('');
@@ -44,7 +45,8 @@ export default function AnnouncementsPage() {
           <li key={a._id}><span><strong>{a.title}</strong> · {a.body} — {a.postedBy?.name || 'Unknown'} · {new Date(a.createdAt).toLocaleDateString()}</span>
             {user?.role === 'ADMIN' && <Button variant="ghost" onClick={async () => { await deleteAnnouncement(a._id); load(); }}>Delete</Button>}</li>
         ))}
-        {announcements.length === 0 && <li className="muted">No announcements yet.</li>}</ul>
+        {loading && <li className="muted">Loading…</li>}
+        {!loading && announcements.length === 0 && <li className="muted">No announcements yet.</li>}</ul>
       </Card>
     </>
   );

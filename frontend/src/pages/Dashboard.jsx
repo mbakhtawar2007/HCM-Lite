@@ -23,7 +23,8 @@ export default function Dashboard() {
       </p>
       <Card title={rolePage.label}>
         <p className="muted">
-          Core HR flows are live in P1 (employees, attendance, leave, payroll); server-computed KPIs arrive in P2.
+          Employees, attendance, leave and payroll (P1), server-computed dashboards (P2), the AI assistant (P3),
+          and audit, announcements and notifications (P4) are all live. Open your role dashboard below.
         </p>
         <Link className="btn btn-primary" to={rolePage.path}>
           Open {rolePage.label.toLowerCase()}

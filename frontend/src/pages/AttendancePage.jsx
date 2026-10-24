@@ -15,12 +15,14 @@ export default function AttendancePage() {
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
   const [reason, setReason] = useState('');
+  const [loading, setLoading] = useState(true);
   const load = () => {
+    setLoading(true);
     if (isStaff) {
-      attendanceBoard(new Date().toISOString().slice(0, 10)).then((d) => setBoard(d.board)).catch((e) => setError(getErrorMessage(e)));
+      attendanceBoard(new Date().toISOString().slice(0, 10)).then((d) => setBoard(d.board)).catch((e) => setError(getErrorMessage(e))).finally(() => setLoading(false));
       listCorrections().then((d) => setCorrections(d.corrections)).catch(() => {});
     } else {
-      myAttendance().then((d) => setMine(d.attendance)).catch((e) => setError(getErrorMessage(e)));
+      myAttendance().then((d) => setMine(d.attendance)).catch((e) => setError(getErrorMessage(e))).finally(() => setLoading(false));
       listCorrections().then((d) => setCorrections(d.corrections)).catch(() => {});
     }
   };
@@ -39,11 +41,11 @@ export default function AttendancePage() {
       )}
       {isStaff ? (
         <Card title="Daily board (today)">
-          <ul className="item-list">{board.map((b) => <li key={b.employee._id}><span><strong>{b.employee.user?.name}</strong> · {b.employee.employeeCode}</span><span>{b.status}</span></li>)}</ul>
+          <ul className="item-list">{loading && <li className="muted">Loading…</li>}{board.map((b) => <li key={b.employee._id}><span><strong>{b.employee.user?.name}</strong> · {b.employee.employeeCode}</span><span>{b.status}</span></li>)}</ul>
         </Card>
       ) : (
         <Card title="My attendance">
-          <ul className="item-list">{mine.map((a) => <li key={a._id}><span>{a.date.slice(0, 10)} · {a.checkIn ? new Date(a.checkIn).toLocaleTimeString() : ''} — {a.checkOut ? new Date(a.checkOut).toLocaleTimeString() : 'no check-out'}</span><span>{a.status}</span></li>)}</ul>
+          <ul className="item-list">{loading && <li className="muted">Loading…</li>}{mine.map((a) => <li key={a._id}><span>{a.date.slice(0, 10)} · {a.checkIn ? new Date(a.checkIn).toLocaleTimeString() : ''} — {a.checkOut ? new Date(a.checkOut).toLocaleTimeString() : 'no check-out'}</span><span>{a.status}</span></li>)}</ul>
         </Card>
       )}
       <Card title="Correction requests">

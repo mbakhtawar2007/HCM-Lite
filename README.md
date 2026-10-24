@@ -6,26 +6,82 @@ Employee) that **starts empty**: no dummy data. Judges create the company,
 accounts and activity live, then check that dashboards and AI answers match
 those records.
 
-## What is built (P0)
+Live deployment: frontend https://hcm-lite.netlify.app, backend
+https://hcm-lite-gray.vercel.app (API under `/api`).
 
-- **First-run setup** — the app starts with no users. Open `/setup`, name the
-  company and create the first Admin account. Setup succeeds exactly once;
-  afterwards `POST /api/setup` returns 403.
-- **Role-based auth** — JWT (Bearer) + bcrypt. User roles: `ADMIN`, `HR`,
-  `EMPLOYEE`, plus `isActive` and `mustChangePassword` flags. Roles are
-  enforced **on the server** (`requireRole` middleware); the frontend menu
-  is only a convenience. There is no public self-registration: accounts
-  come from setup, then from Admin/HR creation (P1).
-- **Organisation models** — `Setting` (one company row: name, office start
-  09:00, 15-minute grace, Sat–Sun weekends), `Department`, `Designation`,
-  `LeaveType` (Annual 14, Sick 8, Casual 10, Unpaid unlimited — seeded at
-  setup), `Holiday`.
-- **Role dashboard shells** — `/admin`, `/hr`, `/employee` plus a role-aware
-  `/dashboard` hub. Empty states only; no fake headcount or payroll numbers.
+## What is built (P0–P5)
 
-Not yet built (later phases): employees, attendance, leave, payroll (P1),
-server-computed dashboards (P2), AI assistant (P3), audit log (P4),
-demo/docs polish (P5), bonus features (P6).
+- **P0 — First-run setup** — the app starts with no users. Open `/setup`,
+  name the company and create the first Admin account. Setup succeeds
+  exactly once; afterwards `POST /api/setup` returns 403.
+- **P0 — Role-based auth** — JWT (Bearer) + bcrypt. User roles: `ADMIN`,
+  `HR`, `EMPLOYEE`, plus `isActive` and `mustChangePassword` flags.
+  Roles are enforced **on the server** (`requireRole` middleware); the
+  frontend menu is only a convenience. There is no public
+  self-registration: accounts come from setup, then from Admin/HR creation.
+- **P0 — Organisation models** — `Setting` (one company row: name, office
+  start 09:00, 15-minute grace, Sat–Sun weekends), `Department`,
+  `Designation`, `LeaveType` (Annual 14, Sick 8, Casual 10, Unpaid
+  unlimited — seeded at setup), `Holiday`.
+- **P1 — Core HR flows** — Admin creates/deactivates/resets logins;
+  temporary passwords must be changed on first sign-in. Org settings,
+  departments, designations, leave types and holidays (Admin writes, HR
+  reads). HR registers employees (login + job + salary), directory with
+  server search/filter/paging, Employee 360 view, CSV export and CSV
+  import dry-run. Attendance with server-stamped check-in/out (second
+  check-in 409; late after 09:15, half day under 5 h, absent, missing
+  check-out), daily board and correction requests. Leave on working days
+  only (weekends + holidays skipped; overlap or over-balance 422; HR
+  decisions with notifications). Payroll Lite: gross = 1.5 × basic
+  (HRA 40%, medical 10%), per-day deductions, joiner/leaver prorating,
+  tax slabs, HR draft → Admin finalize → locked forever, payslip PDF
+  (own only, finalized only).
+- **P2 — Server-computed dashboards** — `/api/dashboards/admin|hr|employee`
+  compute every KPI on the server (MongoDB aggregation + the shared
+  attendance service), filterable by date range and department: headcount,
+  attrition, payroll cost from finalized runs, attendance/late/
+  absenteeism rates, leave utilization, top 5 late-comers, tenure, audit
+  feed. Rates with no denominator show "No data yet", never NaN.
+- **P3 — AI assistant** — see "AI assistant (P3)" below: chat with 7
+  scoped tools, dashboard summary from supplied KPI JSON only, smart
+  leave prefill (never auto-creates), policy Q&A from the brief's rules
+  or "does not know", 15 s timeout, ~20 requests/user/hour, every call
+  logged, every answer labelled "AI-generated".
+- **P4 — Security, audit, comms** — every create/update/approve/finalize
+  writes an audit entry (actor, action, entity, before/after JSON);
+  audit entries are never editable or deletable, and Admin reads them
+  paged and filtered. Announcements (Admin/HR post, all read, on every
+  dashboard, Admin-only delete). Notifications for leave decisions and
+  payslip availability, own only.
+- **P5 — Demo, docs, polish** — this README, a loading/empty/error-state
+  pass over every page, and a fresh-database demo rehearsal script
+  (`backend/test-demo.mjs`, see "5-minute demo" below).
+
+## What is NOT done (honest limits)
+
+- **Actual CSV import (writing rows)** — the import endpoint is a dry-run
+  only: it validates and reports row + field + reason errors, but writes
+  nothing. Export works.
+- **Announcement editing** — announcements are post/delete only; there
+  is no edit endpoint.
+- **Approved-leave cancellation** — only pending leave can be cancelled
+  via the API; cancelling approved leave would silently change balances
+  and payroll.
+- **Employee payslips before finalization** — employees see payslips
+  only for finalized runs, never drafts.
+- **Gender breakdown** — employees have no gender field, so dashboards
+  show "not collected" instead of invented numbers.
+- **Live AI answer verification** — a live AI answer against the
+  deployed instance has not been verified end to end without a
+  signed-in account, because creating one would block first-run setup
+  for judges. The AI code is verified with a mocked provider in
+  `backend/test-p3.mjs` and in the demo rehearsal; a deployed AI key
+  must be present (see "AI assistant (P3)") for live answers.
+- **Bonus (P6)** — late penalty, anomaly flags, attrition risk, camera
+  attendance, Roman Urdu, dark mode/PWA are not built.
+- **Account recovery** — no email verification, password reset, or
+  refresh tokens; password resets are done by Admin (temporary
+  password, must be changed on next sign-in).
 
 ## Tech stack
 
@@ -162,15 +218,41 @@ Base URL: `/api` (dev proxy) or `$VITE_API_URL`. All responses are JSON
 with `success: true/false`. Errors return `message`, and validation errors
 also return `errors: [{ field, message }]`.
 
-| Method | Endpoint | Auth | Body | Notes |
-| ------ | -------- | ---- | ---- | ----- |
-| GET | `/api/health` | No | — | Server health check |
-| GET | `/api/setup/status` | No | — | `{ needsSetup: true/false }` — true while no user exists |
-| POST | `/api/setup` | No | `{ companyName, adminName, adminEmail, adminPassword }` | Creates company + first ADMIN + default leave types. 403 once a user exists |
-| POST | `/api/auth/login` | No | `{ email, password }` | Same error for unknown user / wrong password. Returns `{ token, user }` |
-| POST | `/api/auth/logout` | Yes | — | JWTs are stateless; the frontend also deletes its token |
-| GET | `/api/users/me` | Yes | — | Logged-in user's profile (password never included) |
-| GET | `/api/users` | Yes, ADMIN only | — | All users (no passwords). Other roles get 403 |
+| Method | Endpoint | Auth | Notes |
+| ------ | -------- | ---- | ----- |
+| GET | `/api/health` | No | Server health check |
+| GET | `/api/setup/status` | No | `{ needsSetup: true/false }` — true while no user exists |
+| POST | `/api/setup` | No | Creates company + first ADMIN + default leave types. 403 once a user exists |
+| POST | `/api/auth/login` | No | Same error for unknown user / wrong password. Returns `{ token, user }` |
+| POST | `/api/auth/logout` | Yes | JWTs are stateless; the frontend also deletes its token |
+| POST | `/api/auth/change-password` | Yes | Own password; clears `mustChangePassword` |
+| GET | `/api/users/me` | Yes | Logged-in user's profile (password never included) |
+| GET/POST | `/api/users` | ADMIN | List / create logins (temporary password on create) |
+| PATCH | `/api/users/:id` | ADMIN | Update / deactivate (cannot deactivate self) |
+| POST | `/api/users/:id/reset-password` | ADMIN | Set a temporary password |
+| GET/PATCH | `/api/org/settings` | HR read, ADMIN write | Company settings (office start, grace, weekends, location/radius) |
+| CRUD | `/api/org/departments`, `/designations`, `/leave-types`, `/holidays` | HR read, ADMIN write | Delete blocked with 409 if in use |
+| GET/POST | `/api/employees` | HR/ADMIN | Directory: server search, filters, paging; HR registers (creates login) |
+| GET | `/api/employees/me`, `/api/employees/:id`, `/api/employees/:id/360` | Scope-checked | Employee edits only own phone/address; 360 = details + attendance + leave + payslips |
+| GET | `/api/employees/export/csv` | HR/ADMIN | CSV export |
+| POST | `/api/employees/import/dry-run` | HR/ADMIN | Validation only — row + field + reason errors, writes nothing |
+| POST | `/api/attendance/check-in`, `/check-out` | Yes | Server-stamped times; second check-in 409 |
+| GET | `/api/attendance/me`, `/api/attendance`, `/api/attendance/board` | Scope-checked | Own calendar; staff daily board (incl. on-leave/absent) |
+| POST/PATCH | `/api/attendance/corrections` | Request: employee; decide: HR | Correction requests with reason, HR approves/rejects |
+| GET/POST | `/api/leaves`, `/api/leaves/balances` | Scope-checked | Apply (EMPLOYEE only), balances, history; working days only |
+| PATCH | `/api/leaves/:id/cancel` | EMPLOYEE | Pending leave only |
+| PATCH | `/api/leaves/:id/decision` | HR/ADMIN | Approve/reject with comment; creates employee notification |
+| GET/POST | `/api/payroll/runs` | HR/ADMIN | Create/review drafts |
+| POST | `/api/payroll/runs/:id/finalize` | ADMIN only | Finalizes and locks the run forever |
+| POST/DELETE | `/api/payroll/runs/:id/recompute`, `/api/payroll/runs/:id` | HR/ADMIN | Draft only; finalized runs return 409 |
+| GET | `/api/payroll/runs/:id/payslip/:employeeId`, `.../pdf` | Scope-checked | Own only, finalized only (403 otherwise); PDF via PDFKit |
+| GET | `/api/payroll/my-payslips` | EMPLOYEE | Finalized payslips only |
+| GET | `/api/dashboards/admin`, `/hr`, `/employee` | Role + scope | Server-computed KPIs; `?from=&to=&department=` filters |
+| POST | `/api/ai/chat`, `/api/ai/dashboard-summary`, `/api/ai/smart-leave` | Auth + scope | See "AI assistant (P3)"; 503 without a key, 429 over ~20/hour |
+| GET/POST | `/api/announcements` | Read: all; post: ADMIN/HR | Active announcements, newest first |
+| DELETE | `/api/announcements/:id` | ADMIN only | Audit-logged |
+| GET/PATCH | `/api/notifications`, `/api/notifications/:id/read` | Own only | Leave decisions + payslip availability; another user's notification is 403 |
+| GET | `/api/audit-logs` | ADMIN only | Paged, filterable by actor/action/entity/date; never editable or deletable |
 
 Authenticated requests send `Authorization: Bearer <token>`. The frontend
 does this automatically (see `frontend/src/api/client.js`); on a 401 the
@@ -191,25 +273,26 @@ hcm-lite/
 │       ├── server.js             # Entry point: connects DB, optional auto-seed, then listens
 │       ├── app.js                # Express app: middleware, routes, errors
 │       ├── config/               # env.js (loads + validates env), db.js (Mongoose)
-│       ├── models/               # User, Setting, Department, Designation, LeaveType, Holiday
-│       ├── controllers/          # auth, setup, user
-│       ├── routes/               # authRoutes, setupRoutes, userRoutes
-│       ├── services/             # setupService (shared by /setup and env auto-seed)
+│       ├── models/               # User, Setting, Department, Designation, LeaveType, Holiday, Employee, Attendance, AttendanceCorrection, LeaveRequest, PayrollRun, AuditLog, Notification, Announcement, AiLog
+│       ├── controllers/          # auth, setup, user, org, employee, attendance, leave, payroll, dashboard, ai, announcement, misc (audit/notifications)
+│       ├── routes/               # auth, setup, user, org, employee, attendance, leave, payroll, dashboard, ai, announcement, misc
+│       ├── services/             # setupService, settingsService, attendanceService (shared status rules), payrollService, csvService, dashboardService, aiService, aiTools
 │       ├── middleware/           # auth (JWT), requireRole, validate (Zod), errorHandler, rateLimit
 │       ├── validation/           # Zod schemas per resource
-│       └── utils/                # asyncHandler, ApiError, generateToken
+│       ├── utils/                # asyncHandler, ApiError, generateToken, scope
+│       └── test-p1.mjs, test-p2.mjs, test-p3.mjs, test-p4.mjs, test-demo.mjs  # In-memory MongoDB suites (see "Tests")
 └── frontend/
     ├── package.json
     ├── vite.config.js            # Dev proxy: /api → http://localhost:5000
     ├── .env.example
     └── src/
         ├── main.jsx              # Router + AuthProvider bootstrap
-        ├── App.jsx               # All routes (role-guarded dashboard shells)
+        ├── App.jsx               # All routes (role-guarded)
         ├── index.css             # Plain CSS, no framework
-        ├── api/                  # client.js (axios + token), auth.js, setup.js
+        ├── api/                  # client.js (axios + token), auth.js, setup.js, p1.js, dashboards.js, ai.js
         ├── context/AuthContext.jsx  # user, login, logout
-        ├── components/           # Layout, Navbar, ProtectedRoute, ui/*
-        ├── pages/                # Home, Setup, Login, Dashboard, Admin/HR/Employee dashboards, NotFound
+        ├── components/           # Layout, Navbar, ProtectedRoute, DashboardFilters, DashboardAiSummary, Rate, ui/*
+        ├── pages/                # Home, Setup, Login, ChangePassword, Dashboard, Admin/HR/Employee dashboards, Users, Settings, Employees, Employee360, Attendance, Leaves, Payroll, Notifications, Announcements, Audit, AiChat, NotFound
         └── utils/errors.js       # One readable message from any API error
 ```
 
@@ -238,9 +321,9 @@ hcm-lite/
   request bodies are capped at 100 KB.
 - Login returns the same message for an unknown email and a wrong
   password, so attackers cannot probe which emails are registered.
-- This phase has **no** email verification, password reset, refresh
-  tokens, employee management, attendance, leave, payroll, dashboards
-  with real data, AI assistant, or audit log — those arrive in P1–P4.
+- This app has **no** email verification, self-service password reset,
+  or refresh tokens (see "What is NOT done"). Roles and data scope are
+  enforced on the server on every route, not just in the UI.
 
 ## AI assistant (P3)
 
@@ -281,19 +364,73 @@ hcm-lite/
 - **Without a key:** AI routes return a friendly `503 "AI not
   configured"` and the frontend shows that state; dashboards, leave,
   attendance and payroll all work normally.
-- **Not yet done:** P5 demo/docs polish and P6 bonus (camera
-  attendance) are still open; the AI provider is Groq by default and
-  any other OpenAI-compatible endpoint needs its own key and model name.
+- **Not yet done:** P6 bonus features (camera attendance, late penalty,
+  anomaly flags, attrition risk, Roman Urdu, dark mode/PWA) are still
+  open; the AI provider is Groq by default and any other
+  OpenAI-compatible endpoint needs its own key and model name. A live
+  AI answer against the deployed instance has not been verified end
+  to end without a signed-in account (see "What is NOT done").
 
-## Deployment (sketch)
+## Deployment (live instance)
 
-- **Frontend:** deploy the `frontend/` folder to Netlify or Vercel, and
-  set `VITE_API_URL` to your deployed backend URL before building.
-- **Backend:** deploy `backend/` to any Node host, and set the backend
-  environment variables there — especially `MONGO_URI`, `JWT_SECRET`,
-  `NODE_ENV=production`, and `CLIENT_URL` to your deployed frontend origin.
+- **Frontend:** https://hcm-lite.netlify.app (Netlify site `hcm-lite`),
+  built with `VITE_API_URL=https://hcm-lite-gray.vercel.app/api`.
+- **Backend:** https://hcm-lite-gray.vercel.app (Vercel project
+  `hcm-lite`, Root Directory `backend`, serverless adapter in
+  `backend/api/index.js` + `backend/vercel.json`).
+- **Database:** MongoDB Atlas M0, Network Access Allow Access from
+  Anywhere (`0.0.0.0/0`, needed because Vercel's IPs are dynamic).
+- **Backend env vars in hosting:** `NODE_ENV`, `MONGO_URI`, `JWT_SECRET`,
+  `CLIENT_URL` (the Netlify origin), plus `AI_API_KEY` for P3 (see
+  above). Never commit any of these values.
 - If the frontend build talks to `localhost` in production, the build
-  went out without `VITE_API_URL` — rebuild with it set.
+  went out without `VITE_API_URL` — rebuild with it set. The backend
+  reads only the exact variable name `MONGO_URI`; an `@` (or `/ ? # [`)
+  in an Atlas password breaks the connection-string URL unless it is
+  URL-encoded — use a letters-and-numbers password to avoid that trap.
+
+## 5-minute demo (fresh database, in order)
+
+This is the rehearsed script, and it is also automated — see "Tests".
+
+1. **Admin setup** — open the frontend, `/setup`: company name + first
+   Admin. Setup succeeds once; a second attempt is 403.
+2. **HR login created** — Admin creates an HR login (temporary
+   password); HR signs in and changes it.
+3. **HR registers 2–3 employees** — Employees page: job details +
+   salary; each registration creates the employee's login.
+4. **Employee signs in, changes temp password, checks in** — the
+   employee's own check-in is stamped by the server; a second check-in
+   is 409.
+5. **Smart leave** — on the Leaves page, type plain words ("need next
+   Monday and Tuesday off for a wedding") and confirm the pre-filled
+   form. It never auto-creates.
+6. **HR approves** — the employee gets a notification; HR's approved
+   list shows who is on leave.
+7. **Dashboard summary** — Admin/HR dashboards show the real KPIs;
+   "Summarize" returns AI bullets from those numbers only.
+8. **Payroll run** — HR creates the month's draft; Admin finalizes it
+   (locked forever after that).
+9. **Employee downloads payslip, asks a colleague's salary (refused)**
+   — own payslip PDF only after finalization; a colleague's salary is
+   politely refused with no data leaked.
+10. **Admin shows the audit log** — every step above appears with
+    actor, action, entity and before/after JSON.
+
+## Tests
+
+All suites run against in-memory MongoDB (`mongodb-memory-server`);
+they need no live database and no real AI key (the AI provider is
+mocked in `test-p3.mjs` and `test-demo.mjs`).
+
+```bash
+cd backend
+node test-p1.mjs    # Core flows: 56 checks
+node test-p2.mjs    # Dashboards/formulas: 44 checks
+node test-p3.mjs    # AI tools/guards (mocked LLM): 27 checks
+node test-p4.mjs    # Audit/announcements/notifications/security: 60 checks
+node test-demo.mjs  # The 5-minute demo, end to end: 40 checks
+```
 
 ## Commands
 
