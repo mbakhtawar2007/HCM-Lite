@@ -44,10 +44,29 @@ export default function Settings() {
   const [setting, setSetting] = useState(null);
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
+  const [busy, setBusy] = useState(false);
   useEffect(() => { getSetting().then((d) => setSetting(d.setting)).catch((e) => setError(getErrorMessage(e))); }, []);
   const save = async (e) => {
-    e.preventDefault(); setError(''); setMsg('');
-    try { await updateSetting({ officeStartMinutes: Number(setting.officeStartMinutes), graceMinutes: Number(setting.graceMinutes), officeRadiusMeters: Number(setting.officeRadiusMeters) }); setMsg('Settings saved.'); } catch (err) { setError(getErrorMessage(err)); }
+    e.preventDefault(); setError(''); setMsg(''); setBusy(true);
+    try {
+      // Phase 1 fix: the old save dropped the Company field (editable
+      // but never sent) and had no inputs for the office location, so
+      // the geofence could never be configured from the UI. Now all
+      // edited fields are sent, and the saved settings are re-read
+      // instead of trusting local state.
+      await updateSetting({
+        companyName: setting.companyName,
+        officeStartMinutes: Number(setting.officeStartMinutes),
+        graceMinutes: Number(setting.graceMinutes),
+        officeRadiusMeters: Number(setting.officeRadiusMeters),
+        officeLat: setting.officeLat === '' || setting.officeLat == null ? null : Number(setting.officeLat),
+        officeLng: setting.officeLng === '' || setting.officeLng == null ? null : Number(setting.officeLng),
+      });
+      const fresh = await getSetting();
+      setSetting(fresh.setting);
+      setMsg('Settings saved.');
+    } catch (err) { setError(getErrorMessage(err)); }
+    finally { setBusy(false); }
   };
   if (!setting) return <p className="muted">Loading…</p>;
   return (
@@ -62,8 +81,10 @@ export default function Settings() {
           <Input label="Office start (minutes after midnight, 540 = 09:00)" type="number" value={setting.officeStartMinutes} onChange={(e) => setSetting({ ...setting, officeStartMinutes: e.target.value })} disabled={readOnly} />
           <Input label="Grace (minutes)" type="number" value={setting.graceMinutes} onChange={(e) => setSetting({ ...setting, graceMinutes: e.target.value })} disabled={readOnly} />
           <Input label="Office radius (metres)" type="number" value={setting.officeRadiusMeters} onChange={(e) => setSetting({ ...setting, officeRadiusMeters: e.target.value })} disabled={readOnly} />
-          <p className="muted">Weekends: {setting.weekendDays?.join(', ')} · Late after {Math.floor((setting.officeStartMinutes + setting.graceMinutes) / 60)}:{String((setting.officeStartMinutes + setting.graceMinutes) % 60).padStart(2, '0')}</p>
-          {!readOnly && <Button type="submit">Save settings</Button>}
+          <Input label="Office latitude (blank = no location check)" type="number" step="any" value={setting.officeLat ?? ''} onChange={(e) => setSetting({ ...setting, officeLat: e.target.value })} disabled={readOnly} />
+          <Input label="Office longitude (blank = no location check)" type="number" step="any" value={setting.officeLng ?? ''} onChange={(e) => setSetting({ ...setting, officeLng: e.target.value })} disabled={readOnly} />
+          <p className="muted">Weekends: {setting.weekendDays?.join(', ')} · Late after {Math.floor((setting.officeStartMinutes + setting.graceMinutes) / 60)}:{String((setting.officeStartMinutes + setting.graceMinutes) % 60).padStart(2, '0')} · When latitude and longitude are set, check-in requires the employee's location to be inside the radius; otherwise check-in works without location.</p>
+          {!readOnly && <Button type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save settings'}</Button>}
         </form>
       </Card>
       <Section title="Departments" section="departments" readOnly={readOnly} fields={[{ key: 'name', label: 'Name', required: true }, { key: 'description', label: 'Description' }]} />

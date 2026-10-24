@@ -21,7 +21,12 @@ export const createRun = asyncHandler(async (req, res) => {
   const employees = await Employee.find({ isActive: true }).sort({ employeeCode: 1 });
   const lines = [];
   for (const emp of employees) {
-    lines.push(await buildPayrollLine(emp, year, month, setting, holidays));
+    const line = await buildPayrollLine(emp, year, month, setting, holidays);
+    // Phase 1 fix: an employee not employed at all in this month
+    // (joined later / left earlier) had effectiveWorkingDays 0, so
+    // grossPayable 0 minus tax on the full gross gave a NEGATIVE net.
+    // Such employees simply get no line in this month's run.
+    if (line.effectiveWorkingDays > 0) lines.push(line);
   }
   const run = await PayrollRun.create({ month: req.body.month, createdBy: req.user._id, lines });
   await writeAudit(req, 'CREATE', 'PayrollRun', run._id, null, { month: run.month, lines: lines.length });
@@ -48,7 +53,10 @@ export const recomputeRun = asyncHandler(async (req, res) => {
   const holidays = await Holiday.find();
   const employees = await Employee.find({ isActive: true }).sort({ employeeCode: 1 });
   const lines = [];
-  for (const emp of employees) lines.push(await buildPayrollLine(emp, year, month, setting, holidays));
+  for (const emp of employees) {
+    const line = await buildPayrollLine(emp, year, month, setting, holidays);
+    if (line.effectiveWorkingDays > 0) lines.push(line);
+  }
   const beforeRecompute = run.toJSON();
   run.lines = lines;
   await run.save();

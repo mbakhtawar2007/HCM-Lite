@@ -16,6 +16,7 @@ export default function LeavesPage() {
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
   const [form, setForm] = useState({ leaveType: '', startDate: '', endDate: '', reason: '' });
+  const [busy, setBusy] = useState(false);
   const [smartText, setSmartText] = useState('');
   const [smartLoading, setSmartLoading] = useState(false);
   // P3 smart leave: plain words -> pre-filled form. Nothing is applied
@@ -46,8 +47,9 @@ export default function LeavesPage() {
   };
   useEffect(load, []);
   const submit = async (e) => {
-    e.preventDefault(); setError(''); setMsg('');
+    e.preventDefault(); setError(''); setMsg(''); setBusy(true);
     try { await applyLeave(form); setMsg('Leave applied. Working days skip weekends and holidays.'); load(); } catch (err) { setError(getErrorMessage(err)); }
+    finally { setBusy(false); }
   };
   return (
     <>
@@ -72,7 +74,7 @@ export default function LeavesPage() {
               <Input label="Start date" type="date" required value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} />
               <Input label="End date" type="date" required value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
               <Input label="Reason" required value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} />
-              <Button type="submit">Apply</Button>
+              <Button type="submit" disabled={busy}>{busy ? 'Applying…' : 'Apply'}</Button>
             </form>
           </Card>
         </>

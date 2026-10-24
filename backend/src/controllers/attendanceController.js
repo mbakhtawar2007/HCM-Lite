@@ -6,17 +6,40 @@ import { Employee } from '../models/Employee.js';
 import { LeaveRequest } from '../models/LeaveRequest.js';
 import { Holiday } from '../models/Holiday.js';
 import { computeAttendanceStatus, todayDayStart, writeAudit } from '../services/attendanceService.js';
-import { getSetting, dayStart, dateKey, isWeekend, isHoliday, listWorkingDaysInMonth } from '../services/settingsService.js';
+import { getSetting, dayStart, dateKey, isWeekend, isHoliday, listWorkingDaysInMonth, haversineMeters } from '../services/settingsService.js';
 import { ownEmployee, scopedEmployee } from '../utils/scope.js';
 
 // POST /api/attendance/check-in — server-stamped time, one record/day.
+// Phase 1 geofence: if the office location (officeLat/officeLng) and a
+// radius are set in Settings, the employee must send their location and
+// be inside the radius. If no office location is set, check-in works
+// exactly as before (no location required, nothing breaks).
 export const checkIn = asyncHandler(async (req, res) => {
   const emp = await ownEmployee(req.user._id);
+  const setting = await getSetting();
+  if (setting.officeLat != null && setting.officeLng != null && setting.officeRadiusMeters > 0) {
+    const { latitude, longitude } = req.body || {};
+    if (latitude == null || longitude == null) {
+      throw badRequest('Office location check is enabled: please share your location to check in');
+    }
+    const distance = haversineMeters(setting.officeLat, setting.officeLng, latitude, longitude);
+    if (distance > setting.officeRadiusMeters) {
+      throw forbidden(`You are outside the office radius (${Math.round(distance)}m away, limit ${setting.officeRadiusMeters}m)`);
+    }
+  }
   const today = todayDayStart();
   if (await Attendance.findOne({ employee: emp._id, date: today })) {
     throw conflict('Already checked in today');
   }
-  const record = await Attendance.create({ employee: emp._id, date: today, checkIn: new Date() });
+  let record;
+  try {
+    // Unique (employee, date) index is the backstop for a concurrent or
+    // double-clicked check-in: without this catch it surfaced as a 500.
+    record = await Attendance.create({ employee: emp._id, date: today, checkIn: new Date() });
+  } catch (err) {
+    if (err && err.code === 11000) throw conflict('Already checked in today');
+    throw err;
+  }
   await writeAudit(req, 'CREATE', 'Attendance', record._id, null, { employee: String(emp._id), date: today });
   res.status(201).json({ success: true, attendance: record });
 });

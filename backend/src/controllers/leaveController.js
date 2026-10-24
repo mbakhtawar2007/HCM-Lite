@@ -4,18 +4,38 @@ import { ApiError } from '../utils/errors.js';
 import { LeaveRequest } from '../models/LeaveRequest.js';
 import { LeaveType } from '../models/LeaveType.js';
 import { Holiday } from '../models/Holiday.js';
-import { getSetting, workingDaysBetween, dayStart } from '../services/settingsService.js';
+import { getSetting, workingDaysBetween, workingDaysInYear, dayStart } from '../services/settingsService.js';
 import { notifyUser, writeAudit } from '../services/attendanceService.js';
 import { ownEmployee, scopedEmployee } from '../utils/scope.js';
 
-async function usedDays(employeeId, leaveTypeId, year) {
+// Phase 1 fix: previously every approved leave overlapping a year
+// contributed its FULL workingDays to that year, so a leave spanning
+// Dec–Jan was double-counted (and charged fully to the start year on
+// apply). Now only the working days actually falling in that year count.
+async function usedDays(employeeId, leaveTypeId, year, holidays, weekendDays) {
   const start = new Date(Date.UTC(year, 0, 1));
   const end = new Date(Date.UTC(year, 11, 31));
   const approved = await LeaveRequest.find({
     employee: employeeId, leaveType: leaveTypeId, status: 'APPROVED',
     startDate: { $lte: end }, endDate: { $gte: start },
   });
-  return approved.reduce((sum, l) => sum + l.workingDays, 0);
+  return approved.reduce(
+    (sum, l) => sum + workingDaysInYear(l.startDate, l.endDate, year, holidays, weekendDays),
+    0,
+  );
+}
+
+async function pendingDays(employeeId, leaveTypeId, year, holidays, weekendDays) {
+  const start = new Date(Date.UTC(year, 0, 1));
+  const end = new Date(Date.UTC(year, 11, 31));
+  const pending = await LeaveRequest.find({
+    employee: employeeId, leaveType: leaveTypeId, status: 'PENDING',
+    startDate: { $lte: end }, endDate: { $gte: start },
+  });
+  return pending.reduce(
+    (sum, l) => sum + workingDaysInYear(l.startDate, l.endDate, year, holidays, weekendDays),
+    0,
+  );
 }
 
 export const getBalances = asyncHandler(async (req, res) => {
@@ -27,12 +47,13 @@ export const getBalances = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'employeeId is required');
   }
   const year = parseInt(req.query.year, 10) || new Date().getUTCFullYear();
+  const setting = await getSetting();
+  const holidays = await Holiday.find();
   const types = await LeaveType.find().sort({ code: 1 });
   const balances = [];
   for (const t of types) {
-    const used = await usedDays(employeeId, t._id, year);
-    const pendingReqs = await LeaveRequest.find({ employee: employeeId, leaveType: t._id, status: 'PENDING' });
-    const pending = pendingReqs.reduce((s, l) => s + l.workingDays, 0);
+    const used = await usedDays(employeeId, t._id, year, holidays, setting.weekendDays);
+    const pending = await pendingDays(employeeId, t._id, year, holidays, setting.weekendDays);
     balances.push({
       leaveType: t,
       quota: t.isUnlimited ? null : t.yearlyQuota,
@@ -60,9 +81,18 @@ export const applyLeave = asyncHandler(async (req, res) => {
   });
   if (overlap) throw new ApiError(422, 'Leave overlaps an existing pending or approved leave');
   if (!leaveType.isUnlimited) {
-    const used = await usedDays(emp._id, leaveType._id, start.getUTCFullYear());
-    if (used + workingDays > leaveType.yearlyQuota) {
-      throw new ApiError(422, 'Leave exceeds your remaining balance for this type');
+    // Check each calendar year the range touches separately, using only
+    // that year's portion of the range (cross-year leaves used to be
+    // charged in full to the start year).
+    const startYear = start.getUTCFullYear();
+    const endYear = end.getUTCFullYear();
+    for (let year = startYear; year <= endYear; year += 1) {
+      const portion = workingDaysInYear(start, end, year, holidays, setting.weekendDays);
+      if (portion === 0) continue;
+      const used = await usedDays(emp._id, leaveType._id, year, holidays, setting.weekendDays);
+      if (used + portion > leaveType.yearlyQuota) {
+        throw new ApiError(422, 'Leave exceeds your remaining balance for this type');
+      }
     }
   }
   const leave = await LeaveRequest.create({
@@ -101,9 +131,19 @@ export const decideLeave = asyncHandler(async (req, res) => {
   if (!leave) throw notFoundError('Leave request not found');
   if (leave.status !== 'PENDING') throw conflict('Leave already decided');
   if (req.body.status === 'APPROVED' && !leave.leaveType.isUnlimited) {
-    const used = await usedDays(leave.employee, leave.leaveType._id, new Date(leave.startDate).getUTCFullYear());
-    if (used + leave.workingDays > leave.leaveType.yearlyQuota) {
-      throw new ApiError(422, 'Approving this leave would exceed the employee balance');
+    const setting = await getSetting();
+    const holidays = await Holiday.find();
+    const start = dayStart(leave.startDate);
+    const end = dayStart(leave.endDate);
+    for (let year = start.getUTCFullYear(); year <= end.getUTCFullYear(); year += 1) {
+      const portion = workingDaysInYear(start, end, year, holidays, setting.weekendDays);
+      if (portion === 0) continue;
+      // usedDays here counts other approved leaves; this leave is still
+      // PENDING at this point, so it is not double-counted.
+      const used = await usedDays(leave.employee, leave.leaveType._id, year, holidays, setting.weekendDays);
+      if (used + portion > leave.leaveType.yearlyQuota) {
+        throw new ApiError(422, 'Approving this leave would exceed the employee balance');
+      }
     }
   }
   const before = leave.toJSON();

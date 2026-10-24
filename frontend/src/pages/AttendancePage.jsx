@@ -15,6 +15,10 @@ export default function AttendancePage() {
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
   const [reason, setReason] = useState('');
+  const [corrId, setCorrId] = useState('');
+  const [corrIn, setCorrIn] = useState('');
+  const [corrOut, setCorrOut] = useState('');
+  const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const load = () => {
     setLoading(true);
@@ -27,7 +31,20 @@ export default function AttendancePage() {
     }
   };
   useEffect(load, []);
-  const act = async (fn, ok) => { setError(''); setMsg(''); try { await fn(); setMsg(ok); load(); } catch (err) { setError(getErrorMessage(err)); } };
+  const act = async (fn, ok) => { if (busy) return; setError(''); setMsg(''); setBusy(true); try { await fn(); setMsg(ok); load(); } catch (err) { setError(getErrorMessage(err)); } finally { setBusy(false); } };
+  // Browser geolocation for the office geofence: best-effort. If the
+  // user denies or the API is unavailable we send no location — the
+  // server then allows check-in when no office location is set, and
+  // returns a clear error when the geofence is enabled.
+  const getLocation = () => new Promise((resolve) => {
+    if (!navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+      () => resolve(null),
+      { timeout: 5000, maximumAge: 60000 },
+    );
+  });
+  const doCheckIn = async () => { const loc = await getLocation(); await checkIn(loc); };
   return (
     <>
       <h1>Attendance</h1>
@@ -35,8 +52,8 @@ export default function AttendancePage() {
       {msg && <p className="alert">{msg}</p>}
       {!isStaff && (
         <Card title="Today">
-          <p><Button onClick={() => act(checkIn, 'Checked in.')}>Check in</Button> <Button variant="ghost" onClick={() => act(checkOut, 'Checked out.')}>Check out</Button></p>
-          <p className="muted">Times are stamped by the server, not your device clock. A second check-in is rejected.</p>
+          <p><Button disabled={busy} onClick={() => act(doCheckIn, 'Checked in.')}>Check in</Button> <Button variant="ghost" disabled={busy} onClick={() => act(checkOut, 'Checked out.')}>Check out</Button></p>
+          <p className="muted">Times are stamped by the server, not your device clock. A second check-in is rejected. If your company set an office location, check-in asks for your location and must be inside the office radius.</p>
         </Card>
       )}
       {isStaff ? (
@@ -50,9 +67,24 @@ export default function AttendancePage() {
       )}
       <Card title="Correction requests">
         {!isStaff && mine.length > 0 && (
-          <form className="form" onSubmit={(e) => { e.preventDefault(); act(() => requestCorrection({ attendanceId: mine[0]._id, reason }), 'Correction requested.'); }}>
-            <Input label="Reason for correcting your latest record" required value={reason} onChange={(e) => setReason(e.target.value)} />
-            <Button type="submit">Request correction</Button>
+          <form className="form" onSubmit={(e) => {
+            e.preventDefault();
+            // Phase 1 fix: the old form sent only attendanceId + reason,
+            // but the server requires a requested check-in or check-out
+            // time, so every correction from the UI failed with 400.
+            // Now the employee picks the record and the corrected time(s).
+            if (!corrIn && !corrOut) { setError('Enter a corrected check-in or check-out time.'); return; }
+            act(() => requestCorrection({
+              attendanceId: corrId || mine[0]._id, reason,
+              ...(corrIn ? { requestedCheckIn: new Date(corrIn).toISOString() } : {}),
+              ...(corrOut ? { requestedCheckOut: new Date(corrOut).toISOString() } : {}),
+            }), 'Correction requested.').then(() => { setReason(''); setCorrIn(''); setCorrOut(''); });
+          }}>
+            <label className="field"><span>Record to correct</span><select value={corrId} onChange={(e) => setCorrId(e.target.value)}>{mine.map((a) => <option key={a._id} value={a._id}>{a.date.slice(0, 10)} · {a.status}</option>)}</select></label>
+            <Input label="Corrected check-in (optional)" type="datetime-local" value={corrIn} onChange={(e) => setCorrIn(e.target.value)} />
+            <Input label="Corrected check-out (optional)" type="datetime-local" value={corrOut} onChange={(e) => setCorrOut(e.target.value)} />
+            <Input label="Reason" required value={reason} onChange={(e) => setReason(e.target.value)} />
+            <Button type="submit" disabled={busy}>Request correction</Button>
           </form>
         )}
         <ul className="item-list">{corrections.map((c) => (

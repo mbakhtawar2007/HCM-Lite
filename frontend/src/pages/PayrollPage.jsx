@@ -16,6 +16,7 @@ export default function PayrollPage() {
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
   const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
   const load = () => {
     setLoading(true);
     if (isStaff) listPayrollRuns().then((d) => setRuns(d.runs)).catch((e) => setError(getErrorMessage(e))).finally(() => setLoading(false));
@@ -24,8 +25,19 @@ export default function PayrollPage() {
   useEffect(load, []);
   const open = async (id) => { try { setSelected(await getPayrollRun(id)); } catch (err) { setError(getErrorMessage(err)); } };
   const create = async (e) => {
-    e.preventDefault(); setError(''); setMsg('');
+    e.preventDefault(); setError(''); setMsg(''); setBusy(true);
     try { await createPayrollRun({ month }); setMsg('Draft created.'); load(); } catch (err) { setError(getErrorMessage(err)); }
+    finally { setBusy(false); }
+  };
+  const finalize = async (id) => {
+    setError(''); setMsg(''); setBusy(true);
+    try {
+      await finalizePayrollRun(id); setMsg('Finalized and locked.'); load();
+      // Phase 1 fix: the old code refetched the runs list but not the
+      // selected run, so its detail still showed DRAFT after finalize.
+      if (selected) setSelected(await getPayrollRun(id));
+    } catch (err) { setError(getErrorMessage(err)); }
+    finally { setBusy(false); }
   };
   return (
     <>
@@ -38,12 +50,12 @@ export default function PayrollPage() {
           <Card title="Create a monthly draft">
             <form onSubmit={create} className="form">
               <Input label="Month (YYYY-MM)" required value={month} onChange={(e) => setMonth(e.target.value)} placeholder="2026-10" />
-              <Button type="submit">Create draft</Button>
+              <Button type="submit" disabled={busy}>{busy ? 'Creating…' : 'Create draft'}</Button>
             </form>
           </Card>
           <Card title="Payroll runs">
             <ul className="item-list">{loading && <li className="muted">Loading…</li>}{!loading && runs.length === 0 && <li className="muted">No payroll runs yet.</li>}{runs.map((r) => (
-              <li key={r._id}><span><strong>{r.month}</strong> · {r.status} · {r.lines.length} employees</span><span><Button variant="ghost" onClick={() => open(r._id)}>View</Button> {user?.role === 'ADMIN' && r.status === 'DRAFT' && <Button variant="ghost" onClick={async () => { try { await finalizePayrollRun(r._id); setMsg('Finalized and locked.'); load(); } catch (err) { setError(getErrorMessage(err)); } }}>Finalize</Button>}</span></li>
+              <li key={r._id}><span><strong>{r.month}</strong> · {r.status} · {r.lines.length} employees</span><span><Button variant="ghost" onClick={() => open(r._id)}>View</Button> {user?.role === 'ADMIN' && r.status === 'DRAFT' && <Button variant="ghost" disabled={busy} onClick={() => finalize(r._id)}>Finalize</Button>}</span></li>
             ))}</ul>
           </Card>
           {selected && (

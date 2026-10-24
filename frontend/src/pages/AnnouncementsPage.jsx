@@ -15,15 +15,17 @@ export default function AnnouncementsPage() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
   const load = () => { setLoading(true); listAnnouncements().then((d) => setAnnouncements(d.announcements)).catch((e) => setError(getErrorMessage(e))).finally(() => setLoading(false)); };
   useEffect(load, []);
   const post = async (e) => {
-    e.preventDefault(); setError(''); setMessage('');
+    e.preventDefault(); setError(''); setMessage(''); setBusy(true);
     try {
       await createAnnouncement({ title, body });
       setTitle(''); setBody(''); setMessage('Announcement posted.');
       load();
     } catch (err) { setError(getErrorMessage(err)); }
+    finally { setBusy(false); }
   };
   return (
     <>
@@ -36,7 +38,7 @@ export default function AnnouncementsPage() {
           <form onSubmit={post}>
             <Input label="Title" value={title} onChange={(e) => setTitle(e.target.value)} required />
             <label>Body<textarea value={body} onChange={(e) => setBody(e.target.value)} required rows={4} style={{ width: '100%' }} /></label>
-            <Button type="submit">Post</Button>
+            <Button type="submit" disabled={busy}>{busy ? 'Posting…' : 'Post'}</Button>
           </form>
         </Card>
       )}

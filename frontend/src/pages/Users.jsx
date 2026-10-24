@@ -10,19 +10,21 @@ export default function Users() {
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
   const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'HR' });
   const load = () => { setLoading(true); listUsers().then((d) => setUsers(d.users)).catch((e) => setError(getErrorMessage(e))).finally(() => setLoading(false)); };
   useEffect(load, []);
   const submit = async (e) => {
-    e.preventDefault(); setError(''); setMsg('');
+    e.preventDefault(); setError(''); setMsg(''); setBusy(true);
     try { await createUser(form); setMsg('Login created with a temporary password.'); setForm({ name: '', email: '', password: '', role: 'HR' }); load(); }
     catch (err) { setError(getErrorMessage(err)); }
+    finally { setBusy(false); }
   };
   const toggle = async (u) => { try { await updateUser(u._id, { isActive: !u.isActive }); load(); } catch (err) { setError(getErrorMessage(err)); } };
   const reset = async (u) => {
     const pw = window.prompt('New temporary password (min 8 characters):');
     if (!pw) return;
-    try { await resetUserPassword(u._id, { password: pw }); setMsg('Temporary password set; user must change it on next sign-in.'); } catch (err) { setError(getErrorMessage(err)); }
+    try { await resetUserPassword(u._id, { password: pw }); setMsg('Temporary password set; user must change it on next sign-in.'); load(); } catch (err) { setError(getErrorMessage(err)); }
   };
   return (
     <>
@@ -36,7 +38,7 @@ export default function Users() {
           <Input label="Email" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
           <Input label="Temporary password" type="password" required value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
           <label className="field"><span>Role</span><select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}><option>ADMIN</option><option>HR</option><option>EMPLOYEE</option></select></label>
-          <Button type="submit">Create login</Button>
+          <Button type="submit" disabled={busy}>{busy ? 'Creating…' : 'Create login'}</Button>
         </form>
       </Card>
       <Card title="All logins">

@@ -2,7 +2,7 @@ import express from 'express';
 import { protect } from '../middleware/auth.js';
 import { requireRole } from '../middleware/requireRole.js';
 import { validate } from '../middleware/validate.js';
-import { createEmployee, exportEmployeesCsv, getEmployee, getEmployee360, getMyEmployee, importDryRun, listEmployees, updateEmployee } from '../controllers/employeeController.js';
+import { createEmployee, exportEmployeesCsv, getEmployee, getEmployee360, getMyEmployee, importDryRun, importEmployees, listEmployees, updateEmployee } from '../controllers/employeeController.js';
 import { createEmployeeSchema, importDryRunSchema, updateEmployeeSchema } from '../validation/p1Validation.js';
 
 const router = express.Router();
@@ -10,6 +10,7 @@ router.use(protect);
 
 router.get('/export/csv', requireRole('ADMIN', 'HR'), exportEmployeesCsv);
 router.post('/import/dry-run', requireRole('ADMIN', 'HR'), validate(importDryRunSchema), importDryRun);
+router.post('/import', requireRole('ADMIN', 'HR'), validate(importDryRunSchema), importEmployees);
 router.get('/me', requireRole('EMPLOYEE'), getMyEmployee);
 router.get('/:id/360', requireRole('ADMIN', 'HR', 'EMPLOYEE'), getEmployee360);
 router.get('/:id', requireRole('ADMIN', 'HR', 'EMPLOYEE'), getEmployee);

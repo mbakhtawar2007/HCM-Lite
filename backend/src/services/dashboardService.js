@@ -47,7 +47,7 @@ import { Announcement } from '../models/Announcement.js';
 import { LeaveType } from '../models/LeaveType.js';
 import { PayrollRun } from '../models/PayrollRun.js';
 import { computeAttendanceStatus } from './attendanceService.js';
-import { dateKey, dayStart, getSetting, isHoliday, isWeekend } from './settingsService.js';
+import { dateKey, dayStart, getSetting, isHoliday, isWeekend, workingDaysInYear } from './settingsService.js';
 
 const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
 const rate = (num, den) => (den > 0 ? round2(num / den) : null);
@@ -489,8 +489,9 @@ export async function getEmployeeDashboard(employee, query) {
   }
   const rangeRecords = await Attendance.find({ employee: employee._id, date: { $gte: from, $lte: to } });
   const lateCount = rangeRecords.filter((r) => computeAttendanceStatus(r, setting) === 'LATE').length;
-  // Balances use the same method as the P1 balances endpoint: approved
-  // leaves overlapping the year contribute their full workingDays.
+  // Balances use the same method as the P1 balances endpoint: only the
+  // working days actually falling in the current year count (Phase 1
+  // fix — a cross-year leave was previously charged in full here too).
   const year = today.getUTCFullYear();
   const yearStart = new Date(Date.UTC(year, 0, 1));
   const yearEnd = new Date(Date.UTC(year, 11, 31));
@@ -501,9 +502,12 @@ export async function getEmployeeDashboard(employee, query) {
       employee: employee._id, leaveType: t._id, status: 'APPROVED',
       startDate: { $lte: yearEnd }, endDate: { $gte: yearStart },
     });
-    const used = approved.reduce((s, l) => s + l.workingDays, 0);
-    const pendingReqs = await LeaveRequest.find({ employee: employee._id, leaveType: t._id, status: 'PENDING' });
-    const pending = pendingReqs.reduce((s, l) => s + l.workingDays, 0);
+    const used = approved.reduce((s, l) => s + workingDaysInYear(l.startDate, l.endDate, year, holidays, setting.weekendDays), 0);
+    const pendingReqs = await LeaveRequest.find({
+      employee: employee._id, leaveType: t._id, status: 'PENDING',
+      startDate: { $lte: yearEnd }, endDate: { $gte: yearStart },
+    });
+    const pending = pendingReqs.reduce((s, l) => s + workingDaysInYear(l.startDate, l.endDate, year, holidays, setting.weekendDays), 0);
     balances.push({
       leaveType: t, quota: t.isUnlimited ? null : t.yearlyQuota, used, pending,
       remaining: t.isUnlimited ? null : Math.max(0, t.yearlyQuota - used),

@@ -3,12 +3,12 @@ import { protect } from '../middleware/auth.js';
 import { requireRole } from '../middleware/requireRole.js';
 import { validate } from '../middleware/validate.js';
 import { checkIn, checkOut, dailyBoard, decideCorrection, listAttendance, listCorrections, myAttendance, requestCorrection } from '../controllers/attendanceController.js';
-import { correctionDecisionSchema, correctionSchema } from '../validation/p1Validation.js';
+import { checkInSchema, correctionDecisionSchema, correctionSchema } from '../validation/p1Validation.js';
 
 const router = express.Router();
 router.use(protect);
 
-router.post('/check-in', requireRole('EMPLOYEE'), checkIn);
+router.post('/check-in', requireRole('EMPLOYEE'), validate(checkInSchema), checkIn);
 router.post('/check-out', requireRole('EMPLOYEE'), checkOut);
 router.get('/me', requireRole('EMPLOYEE'), myAttendance);
 router.get('/board', requireRole('ADMIN', 'HR'), dailyBoard);

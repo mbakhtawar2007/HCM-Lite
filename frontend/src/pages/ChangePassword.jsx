@@ -12,12 +12,14 @@ export default function ChangePassword() {
   const [form, setForm] = useState({ currentPassword: '', newPassword: '' });
   const [error, setError] = useState('');
   const [done, setDone] = useState('');
+  const [busy, setBusy] = useState(false);
   const handleSubmit = async (e) => {
-    e.preventDefault(); setError(''); setDone('');
+    e.preventDefault(); setError(''); setDone(''); setBusy(true);
     try {
       await changePassword(form);
       setDone('Password changed. Please sign in again with your new password.');
     } catch (err) { setError(getErrorMessage(err)); }
+    finally { setBusy(false); }
   };
   return (
     <Card title="Change password">
@@ -27,7 +29,7 @@ export default function ChangePassword() {
         {done && <p className="alert">{done}</p>}
         <Input label="Current password" type="password" required value={form.currentPassword} onChange={(e) => setForm({ ...form, currentPassword: e.target.value })} />
         <Input label="New password" type="password" required value={form.newPassword} onChange={(e) => setForm({ ...form, newPassword: e.target.value })} />
-        <Button type="submit">Change password</Button>
+        <Button type="submit" disabled={busy}>{busy ? 'Changing…' : 'Change password'}</Button>
         {done && <Button variant="ghost" onClick={() => navigate('/dashboard')}>Back to dashboard</Button>}
       </form>
     </Card>

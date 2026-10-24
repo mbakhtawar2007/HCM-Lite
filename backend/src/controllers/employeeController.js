@@ -89,7 +89,14 @@ export const updateEmployee = asyncHandler(async (req, res) => {
     const before = emp.toJSON();
     if (req.body.department && !(await Department.findById(req.body.department))) throw badRequest('Department not found');
     if (req.body.designation && !(await Designation.findById(req.body.designation))) throw badRequest('Designation not found');
-    Object.assign(emp, req.body);
+    // Phase 1 fix: name lives on the linked User, not on Employee, so
+    // the old Object.assign silently dropped HR name edits. Route name
+    // to the User document and keep it out of the Employee assign.
+    const { name, ...employeeFields } = req.body;
+    if (name !== undefined) {
+      await User.updateOne({ _id: emp.user }, { $set: { name } });
+    }
+    Object.assign(emp, employeeFields);
     await emp.save();
     await writeAudit(req, 'UPDATE', 'Employee', emp._id, before, emp.toJSON());
     return res.status(200).json({ success: true, employee: await populate(Employee.findById(emp._id)) });
@@ -106,7 +113,11 @@ export const getEmployee360 = asyncHandler(async (req, res) => {
     LeaveRequest.find({ employee: emp._id }).sort({ createdAt: -1 }).populate('leaveType'),
     PayrollRun.find({ 'lines.employee': emp._id }).sort({ month: -1 }),
   ]);
-  const payslips = runs.flatMap((r) => r.lines.filter((l) => String(l.employee) === String(emp._id)).map((l) => ({ month: r.month, status: r.status, ...l.toObject() })));
+  // Phase 1 fix: employees must only see FINALIZED payslips (the old
+  // query had no status filter, so draft lines leaked into 360).
+  // Admin/HR keep seeing all runs, including drafts, for review.
+  const visibleRuns = req.user.role === 'EMPLOYEE' ? runs.filter((r) => r.status === 'FINALIZED') : runs;
+  const payslips = visibleRuns.flatMap((r) => r.lines.filter((l) => String(l.employee) === String(emp._id)).map((l) => ({ month: r.month, status: r.status, ...l.toObject() })));
   res.status(200).json({
     success: true,
     employee: await populate(Employee.findById(emp._id)),
@@ -127,9 +138,11 @@ export const exportEmployeesCsv = asyncHandler(async (_req, res) => {
   res.status(200).send([header, ...lines].join('\n'));
 });
 
-// POST /api/employees/import/dry-run — validates only, writes nothing.
-export const importDryRun = asyncHandler(async (req, res) => {
-  const rows = parseCsv(req.body.csv);
+// Shared CSV-import validation (dry-run and real import use the same
+// checks, so a row the dry-run calls valid cannot fail validation on
+// import). Returns per-row errors plus the parsed valid rows.
+async function validateImportRows(csvText) {
+  const rows = parseCsv(csvText);
   if (rows.length < 2) throw badRequest('CSV must have a header row and at least one data row');
   const header = rows[0].map((h) => h.trim().toLowerCase());
   const required = ['name', 'email', 'employeecode', 'department', 'joiningdate', 'basicsalary'];
@@ -137,9 +150,11 @@ export const importDryRun = asyncHandler(async (req, res) => {
   const seenCodes = new Set(); const seenEmails = new Set();
   const departments = await Department.find();
   const deptByName = new Map(departments.map((d) => [d.name.toLowerCase(), d]));
+  const designations = await Designation.find();
+  const desigByName = new Map(designations.map((d) => [d.name.toLowerCase(), d]));
   const existingCodes = new Set((await Employee.find()).map((e) => e.employeeCode));
   const existingEmails = new Set((await User.find()).map((u) => u.email));
-  let valid = 0;
+  const validRows = [];
   for (let i = 1; i < rows.length; i += 1) {
     const rowNum = i + 1; // 1-based including header
     const obj = {};
@@ -159,9 +174,67 @@ export const importDryRun = asyncHandler(async (req, res) => {
       seenCodes.add(code);
     }
     if (obj.department && !deptByName.has(obj.department.toLowerCase())) add('department', 'Unknown department');
+    if (obj.designation && !desigByName.has(obj.designation.toLowerCase())) add('designation', 'Unknown designation');
     if (obj.joiningdate && !/^\d{4}-\d{2}-\d{2}$/.test(obj.joiningdate)) add('joiningDate', 'Date must be YYYY-MM-DD');
     if (obj.basicsalary && !(Number(obj.basicsalary) > 0)) add('basicSalary', 'Salary must be greater than 0');
-    if (rowOk) valid += 1;
+    if (rowOk) {
+      validRows.push({
+        row: rowNum,
+        name: obj.name,
+        email: obj.email.toLowerCase(),
+        employeeCode: obj.employeecode.toUpperCase(),
+        department: deptByName.get(obj.department.toLowerCase())._id,
+        designation: obj.designation ? desigByName.get(obj.designation.toLowerCase())._id : null,
+        phone: obj.phone || undefined,
+        address: obj.address || undefined,
+        joiningDate: obj.joiningdate,
+        basicSalary: Number(obj.basicsalary),
+      });
+    }
   }
-  res.status(200).json({ success: true, totalRows: rows.length - 1, validRows: valid, errors });
+  return { totalRows: rows.length - 1, validRows, errors };
+}
+
+// POST /api/employees/import/dry-run — validates only, writes nothing.
+export const importDryRun = asyncHandler(async (req, res) => {
+  const { totalRows, validRows, errors } = await validateImportRows(req.body.csv);
+  res.status(200).json({ success: true, totalRows, validRows: validRows.length, errors });
+});
+
+// POST /api/employees/import — Phase 1: the missing P1 feature. Creates
+// a login + employee record for each VALID row only; invalid rows are
+// skipped and reported (never partial silent writes). A row that fails
+// mid-create (e.g. a duplicate that raced in) is reported as failed and
+// its login is rolled back, exactly like createEmployee.
+export const importEmployees = asyncHandler(async (req, res) => {
+  const { totalRows, validRows, errors } = await validateImportRows(req.body.csv);
+  const results = [];
+  for (const row of validRows) {
+    try {
+      const user = await User.create({
+        name: row.name, email: row.email,
+        password: crypto.randomBytes(12).toString('base64').slice(0, 16),
+        role: 'EMPLOYEE', mustChangePassword: true,
+      });
+      try {
+        const employee = await Employee.create({
+          user: user._id, employeeCode: row.employeeCode, department: row.department,
+          designation: row.designation, phone: row.phone, address: row.address,
+          joiningDate: row.joiningDate, basicSalary: row.basicSalary,
+        });
+        await writeAudit(req, 'CREATE', 'Employee', employee._id, null, { employeeCode: row.employeeCode, email: row.email, source: 'csv-import' });
+        results.push({ row: row.row, employeeCode: row.employeeCode, email: row.email, status: 'created' });
+      } catch (e) {
+        await User.deleteOne({ _id: user._id });
+        results.push({ row: row.row, employeeCode: row.employeeCode, email: row.email, status: 'failed', reason: 'Could not create employee record' });
+      }
+    } catch (e) {
+      results.push({ row: row.row, employeeCode: row.employeeCode, email: row.email, status: 'failed', reason: 'Could not create login' });
+    }
+  }
+  const created = results.filter((r) => r.status === 'created').length;
+  res.status(200).json({
+    success: true, totalRows, createdRows: created, failedRows: results.filter((r) => r.status === 'failed').length,
+    errors, results,
+  });
 });

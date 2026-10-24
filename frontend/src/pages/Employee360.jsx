@@ -14,11 +14,13 @@ export default function Employee360() {
   const [error, setError] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
+  const [busy, setBusy] = useState(false);
   const load = () => getEmployee360(id).then((d) => { setData(d); setPhone(d.employee.phone || ''); setAddress(d.employee.address || ''); }).catch((e) => setError(getErrorMessage(e)));
   useEffect(load, [id]);
   const saveContact = async (e) => {
-    e.preventDefault();
+    e.preventDefault(); setBusy(true);
     try { await updateEmployee(id, { phone, address }); load(); } catch (err) { setError(getErrorMessage(err)); }
+    finally { setBusy(false); }
   };
   if (error) return <p className="alert alert-error">{error}</p>;
   if (!data) return <p className="muted">Loading…</p>;
@@ -31,7 +33,7 @@ export default function Employee360() {
         <form onSubmit={saveContact} className="form">
           <Input label="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
           <Input label="Address" value={address} onChange={(e) => setAddress(e.target.value)} />
-          <Button type="submit">Save contact</Button>
+          <Button type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save contact'}</Button>
         </form>
       </Card>
       <Card title="Attendance (recent)">

@@ -23,8 +23,9 @@ export const exportEmployees = async () => {
   const a = document.createElement('a'); a.href = url; a.download = 'employees.csv'; a.click(); URL.revokeObjectURL(url);
 };
 export const importDryRun = async (csv) => (await api.post('/employees/import/dry-run', { csv })).data;
+export const importEmployees = async (csv) => (await api.post('/employees/import', { csv })).data;
 
-export const checkIn = async () => (await api.post('/attendance/check-in')).data;
+export const checkIn = async (location = null) => (await api.post('/attendance/check-in', location || {})).data;
 export const checkOut = async () => (await api.post('/attendance/check-out')).data;
 export const myAttendance = async () => (await api.get('/attendance/me')).data;
 export const attendanceBoard = async (date) => (await api.get('/attendance/board', { params: { date } })).data;
