@@ -5,7 +5,7 @@ import morgan from 'morgan';
 import { env } from './config/env.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 import authRoutes from './routes/authRoutes.js';
-import itemRoutes from './routes/itemRoutes.js';
+import setupRoutes from './routes/setupRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 
 const app = express();
@@ -22,7 +22,7 @@ app.get('/api/health', (_req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
-app.use('/api/items', itemRoutes);
+app.use('/api/setup', setupRoutes);
 
 // 404s, then the central error handler (order matters).
 app.use(notFound);

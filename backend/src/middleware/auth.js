@@ -21,6 +21,7 @@ export const protect = asyncHandler(async (req, _res, next) => {
 
   const user = await User.findById(decoded.id);
   if (!user) throw unauthorized('Not authorized, user no longer exists');
+  if (!user.isActive) throw unauthorized('Not authorized, account is deactivated');
 
   req.user = user;
   next();

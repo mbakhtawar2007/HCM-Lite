@@ -1,6 +1,6 @@
 import { User } from '../models/User.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { conflict, unauthorized } from '../utils/errors.js';
+import { unauthorized } from '../utils/errors.js';
 import { generateToken } from '../utils/generateToken.js';
 
 const authResponse = (res, user, statusCode) => {
@@ -11,17 +11,12 @@ const authResponse = (res, user, statusCode) => {
   });
 };
 
-// POST /api/auth/register
-export const register = asyncHandler(async (req, res) => {
-  const { name, email, password } = req.body;
-
-  if (await User.findOne({ email })) {
-    throw conflict('An account with this email already exists');
-  }
-
-  const user = await User.create({ name, email, password });
-  authResponse(res, user, 201);
-});
+// NOTE (P0): there is deliberately NO public self-registration endpoint.
+// The first account is created only by POST /api/setup (or the optional
+// ADMIN_EMAIL/ADMIN_PASSWORD env seed); later accounts are created by
+// Admin/HR in P1. A public /register endpoint would let anyone create a
+// user before first-run setup runs, which would permanently block setup
+// (setup returns 403 once any user exists) and bypass role assignment.
 
 // POST /api/auth/login
 export const login = asyncHandler(async (req, res) => {
@@ -34,6 +29,7 @@ export const login = asyncHandler(async (req, res) => {
   if (!user || !(await user.comparePassword(password))) {
     throw unauthorized('Invalid email or password');
   }
+  if (!user.isActive) throw unauthorized('Account is deactivated');
 
   authResponse(res, user, 200);
 });

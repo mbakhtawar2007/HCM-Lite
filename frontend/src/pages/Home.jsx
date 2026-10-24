@@ -1,36 +1,55 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext.jsx';
+import { getSetupStatus } from '../api/setup.js';
 import Card from '../components/ui/Card.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
 
 const features = [
-  { title: 'Auth included', text: 'Signup, login, logout, JWT tokens and protected routes — already wired up.' },
-  { title: 'Clean API layer', text: 'One axios client, one module per resource. Pages never touch URLs or headers directly.' },
-  { title: 'Example CRUD', text: 'The dashboard is a working items list. Copy its model, controller and route for each new feature.' },
-  { title: 'Validation + errors', text: 'Zod schemas on the backend, one central error handler, friendly messages on the frontend.' },
+  { title: 'Three roles', text: 'Admin, HR and Employee, each with its own menu, data scope and dashboard. Roles are enforced on the server.' },
+  { title: 'First-run setup', text: 'The app starts empty. Set up the company and the first Admin account, then build everything from real data — no dummy data.' },
+  { title: 'Core HR, then AI', text: 'P1 adds employees, attendance, leave and payroll. P2 adds dashboards. P3 adds the AI assistant on the same scoped data.' },
 ];
 
 export default function Home() {
   const { user } = useAuth();
+  const [needsSetup, setNeedsSetup] = useState(null);
+
+  useEffect(() => {
+    if (user) return;
+    getSetupStatus()
+      .then((data) => setNeedsSetup(data.needsSetup))
+      .catch(() => setNeedsSetup(null));
+  }, [user]);
 
   return (
     <>
       <section className="hero">
-        <h1>Start building, not setting up.</h1>
+        <h1>HCM Lite</h1>
         <p>
-          A full-stack starter for hackathons: React + Express + MongoDB, with
-          authentication and a working example feature ready to rename.
+          AI-assisted Human Capital Management for Admin, HR and Employees.
+          Built for the Saylani Hackathon: the system starts empty, and every
+          number comes from what people do in the app.
         </p>
         {user ? (
           <Link className="btn btn-primary" to="/dashboard">
             Go to dashboard
           </Link>
-        ) : (
+        ) : needsSetup ? (
           <div className="hero-actions">
-            <Link className="btn btn-primary" to="/register">
-              Create an account
+            <Link className="btn btn-primary" to="/setup">
+              Set up HCM Lite
             </Link>
             <Link className="btn btn-ghost" to="/login">
               Login
+            </Link>
+          </div>
+        ) : (
+          <div className="hero-actions">
+            <Link className="btn btn-primary" to="/login">
+              Login
+            </Link>
+            <Link className="btn btn-ghost" to="/setup">
+              Set up HCM Lite
             </Link>
           </div>
         )}
@@ -44,21 +63,13 @@ export default function Home() {
         ))}
       </section>
 
-      <Card title="Your first feature in 4 steps">
-        <ol>
-          <li>
-            Backend: copy <code>backend/src/models/Item.js</code>, its controller and route, and rename them.
-          </li>
-          <li>
-            Add a Zod schema in <code>backend/src/validation/</code> and wire the route in{' '}
-            <code>backend/src/app.js</code>.
-          </li>
-          <li>
-            Frontend: add an API module in <code>frontend/src/api/</code> (copy{' '}
-            <code>items.js</code>).
-          </li>
-          <li>Add a page in <code>frontend/src/pages/</code> and a route in <code>App.jsx</code>.</li>
-        </ol>
+      <Card title="P0 status">
+        <p>
+          Done in P0: first-run setup, role-based auth, organisation models
+          (Setting, Department, Designation, LeaveType, Holiday) and role
+          dashboard shells. Not yet built: employees, attendance, leave,
+          payroll, dashboards, AI and audit (P1–P6 — see README).
+        </p>
       </Card>
     </>
   );

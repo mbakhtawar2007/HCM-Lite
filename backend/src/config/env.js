@@ -18,9 +18,16 @@ if (!process.env.JWT_SECRET) {
 export const env = {
   port: Number(process.env.PORT) || 5000,
   nodeEnv: process.env.NODE_ENV || 'development',
-  mongoUri: process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/hackathon-boilerplate',
+  mongoUri: process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/hcm-lite',
   jwtSecret: process.env.JWT_SECRET || 'dev-only-secret-change-me',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
+  // First-run setup auto-seed (optional). Never logged; see server.js.
+  adminEmail: process.env.ADMIN_EMAIL || null,
+  adminPassword: process.env.ADMIN_PASSWORD || null,
+  adminName: process.env.ADMIN_NAME || 'Admin',
+  companyName: process.env.COMPANY_NAME || 'HCM Lite',
+  // AI (P3, set later). Read only by the backend, never by the browser.
+  aiApiKey: process.env.AI_API_KEY || null,
   // One origin, or a comma-separated list.
   clientUrls: (process.env.CLIENT_URL || 'http://localhost:5173')
     .split(',')

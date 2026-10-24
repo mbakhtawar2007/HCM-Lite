@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { fetchMe, loginUser, logoutUser, registerUser } from '../api/auth.js';
+import { fetchMe, loginUser, logoutUser } from '../api/auth.js';
 import {
   clearStoredToken,
   getStoredToken,
@@ -34,13 +34,6 @@ export function AuthProvider({ children }) {
     return data;
   };
 
-  const register = async (details) => {
-    const data = await registerUser(details);
-    storeToken(data.token);
-    setUser(data.user);
-    return data;
-  };
-
   const logout = async () => {
     // Best effort: even if the call fails, the session ends locally.
     try {
@@ -53,7 +46,7 @@ export function AuthProvider({ children }) {
   };
 
   const value = useMemo(
-    () => ({ user, loading, login, register, logout }),
+    () => ({ user, loading, login, logout }),
     [user, loading],
   );
 

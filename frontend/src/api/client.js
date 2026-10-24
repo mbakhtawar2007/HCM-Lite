@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-export const TOKEN_KEY = 'hackathon_token';
+export const TOKEN_KEY = 'hcm_lite_token';
 
 // In dev this is empty, so requests go to /api and Vite proxies them to
 // the backend. In production set VITE_API_URL to the deployed backend.

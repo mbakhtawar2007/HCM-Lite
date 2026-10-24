@@ -1,43 +1,53 @@
-# Hackathon Boilerplate
+# HCM Lite
 
-A reusable full-stack starter for 12-hour hackathons: clone it, install, and
-start building your feature instead of setting up auth, routing, validation,
-and database wiring for the tenth time.
+AI-assisted Human Capital Management — Saylani Hackathon (24 October 2026,
+Zaitoon Ashraf IT Park). A web-based HR system with three roles (Admin, HR,
+Employee) that **starts empty**: no dummy data. Judges create the company,
+accounts and activity live, then check that dashboards and AI answers match
+those records.
+
+## What is built (P0)
+
+- **First-run setup** — the app starts with no users. Open `/setup`, name the
+  company and create the first Admin account. Setup succeeds exactly once;
+  afterwards `POST /api/setup` returns 403.
+- **Role-based auth** — JWT (Bearer) + bcrypt. User roles: `ADMIN`, `HR`,
+  `EMPLOYEE`, plus `isActive` and `mustChangePassword` flags. Roles are
+  enforced **on the server** (`requireRole` middleware); the frontend menu
+  is only a convenience. There is no public self-registration: accounts
+  come from setup, then from Admin/HR creation (P1).
+- **Organisation models** — `Setting` (one company row: name, office start
+  09:00, 15-minute grace, Sat–Sun weekends), `Department`, `Designation`,
+  `LeaveType` (Annual 14, Sick 8, Casual 10, Unpaid unlimited — seeded at
+  setup), `Holiday`.
+- **Role dashboard shells** — `/admin`, `/hr`, `/employee` plus a role-aware
+  `/dashboard` hub. Empty states only; no fake headcount or payroll numbers.
+
+Not yet built (later phases): employees, attendance, leave, payroll (P1),
+server-computed dashboards (P2), AI assistant (P3), audit log (P4),
+demo/docs polish (P5), bonus features (P6).
 
 ## Tech stack
 
-| Layer    | Choice | Why for a hackathon |
-| -------- | ------ | ------------------- |
-| Frontend | React 19 + Vite + React Router | Fast dev server, tiny build, familiar routing |
-| Backend  | Node.js + Express + Mongoose | One language end to end, minimal ceremony |
-| Database | MongoDB (local or Atlas) | No schema migrations to slow you down |
-| Auth     | bcrypt + JWT (Bearer token) | Stateless, works across any frontend host |
-| Validation | Zod (backend) | One schema per route, clear field-level errors |
-| HTTP     | Axios (frontend) | One client, token attached automatically |
+| Layer | Choice |
+| ----- | ------ |
+| Frontend | React 19 + Vite + React Router + Axios, plain CSS |
+| Backend | Node.js + Express + Mongoose + Zod + JWT/bcrypt |
+| Database | MongoDB (local, or a free MongoDB Atlas M0 cluster) |
+| Validation | Zod schemas on the backend, one central error handler |
+| Auth routes | Rate-limited (100 attempts / 15 min / IP) |
 
-No TypeScript, no CSS framework, no test runner, no extra services — every
-dependency in the two `package.json` files is used by the code.
-
-## What is already working
-
-- Signup, login, logout, password hashing (bcrypt), JWT auth, protected routes
-- A working example CRUD feature (items on the dashboard) to copy per feature
-- Central error handling, input validation, rate limiting on auth routes
-- Helmet headers, CORS restricted to your frontend origin, JSON body limits
-- A preconfigured frontend → backend connection (Vite proxy in dev,
-  `VITE_API_URL` in production)
-
-## Quick start
+## Quick start (under 10 minutes)
 
 ### Prerequisites
 
 - Node.js 20+ and npm
-- MongoDB — either local, or a free MongoDB Atlas cluster (see below)
+- MongoDB — local, or a free MongoDB Atlas cluster (see "Database setup")
 
 ### 1. Install
 
 ```bash
-# From the repo root — installs both frontend and backend:
+# From the repo root — installs both backend and frontend:
 npm run install:all
 
 # Or install each side yourself:
@@ -54,15 +64,16 @@ cp .env.example .env
 
 Open `backend/.env` and set at least these two:
 
-- `MONGO_URI` — your MongoDB connection string (defaults to a local database)
+- `MONGO_URI` — your MongoDB connection string (defaults to a local
+  database, `mongodb://127.0.0.1:27017/hcm-lite`).
 - `JWT_SECRET` — a long random secret. Generate one with:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(64).toString('base64'))"
 ```
 
-Changing `JWT_SECRET` later invalidates every existing login token, so keep
-the same value everywhere you deploy it. Never commit `.env`.
+Changing `JWT_SECRET` later invalidates every existing login token, so
+keep the same value everywhere you deploy it. **Never commit `.env`.**
 
 ### 3. Run it
 
@@ -75,8 +86,25 @@ cd backend && npm run dev     # http://localhost:5000
 cd frontend && npm run dev    # http://localhost:5173
 ```
 
-Open http://localhost:5173, register an account, and you should land on the
-dashboard. Check the backend is up at http://localhost:5000/api/health.
+### 4. First-run setup (the demo entry point)
+
+1. Open http://localhost:5173 — the homepage offers **Set up HCM Lite**.
+2. Enter a company name and the first Admin's name, email and password
+   (at least 8 characters), then submit.
+3. You land on the dashboard, signed in as Admin. Reopening `/setup` now
+   shows "Setup already complete".
+4. Check the backend is up at http://localhost:5000/api/health.
+
+**Alternative — env auto-seed (optional):** instead of the `/setup` page,
+set `ADMIN_EMAIL` and `ADMIN_PASSWORD` (plus optional `ADMIN_NAME` and
+`COMPANY_NAME`) in `backend/.env` before the first boot. The server creates
+the first Admin on startup **only when no user exists yet** — it never
+overwrites an existing account and never logs the password. Prefer the
+`/setup` page when a human is doing first-run setup.
+
+**Demo accounts:** there are none by design. Setup creates the first
+Admin; every other account is created from inside the app (P1). For a
+judge run, start from an empty database and use the `/setup` page.
 
 ## Environment variables
 
@@ -86,10 +114,13 @@ dashboard. Check the backend is up at http://localhost:5000/api/health.
 | -------- | -------- | ------- | ----- |
 | `PORT` | No | `5000` | Backend port |
 | `NODE_ENV` | No | `development` | `production` requires `JWT_SECRET` and hides stack traces |
-| `MONGO_URI` | No* | `mongodb://127.0.0.1:27017/hackathon-boilerplate` | *Required in practice unless you run local MongoDB |
+| `MONGO_URI` | No* | `mongodb://127.0.0.1:27017/hcm-lite` | *Required in practice unless you run local MongoDB |
 | `JWT_SECRET` | Yes in production | insecure dev fallback (with a warning) | Long random string; never commit it |
 | `JWT_EXPIRES_IN` | No | `7d` | e.g. `1d`, `12h`, `7d` |
 | `CLIENT_URL` | No | `http://localhost:5173` | CORS origin(s), comma-separated if several |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | No | — | Optional first-Admin auto-seed; only when no user exists |
+| `ADMIN_NAME` / `COMPANY_NAME` | No | `Admin` / `HCM Lite` | Used by the auto-seed only |
+| `AI_API_KEY` | No (P3) | — | Backend-only LLM key, set later; the browser never calls the AI provider |
 
 ### Frontend (`frontend/.env`)
 
@@ -99,10 +130,10 @@ dashboard. Check the backend is up at http://localhost:5000/api/health.
 
 ## Database setup
 
-### Option A — Local MongoDB (fastest for a hackathon)
+### Option A — Local MongoDB (fastest)
 
 Install MongoDB Community on your machine, start it, and leave `MONGO_URI`
-at the default. The database `hackathon-boilerplate` is created on first use.
+at the default. The database `hcm-lite` is created on first use.
 
 ### Option B — MongoDB Atlas (no local install)
 
@@ -110,13 +141,17 @@ at the default. The database `hackathon-boilerplate` is created on first use.
 2. Database Access → add a database user (username + password).
 3. Network Access → add your IP, or `0.0.0.0/0` for a hackathon demo
    (widen access only temporarily — it allows connections from anywhere).
-4. Database → Connect → Drivers, and copy the connection string. It looks like:
-   `mongodb+srv://<username>:<password>@<cluster>.mongodb.net/hackathon-boilerplate`
+4. Database → Connect → Drivers, and copy the connection string. It looks
+   like: `mongodb+srv://<username>:<password>@<cluster>.mongodb.net/hcm-lite`
 5. Put it in `backend/.env` as `MONGO_URI`. If your password contains
    special characters (`@`, `/`, `?`, …), URL-encode them first.
 
+On networks whose DNS refuses SRV lookups, use the non-SRV form instead
+(list the shard hosts, `ssl=true`, `replicaSet=...`, `authSource=admin`)
+— see the Atlas "Drivers" connection string with the SRV part expanded.
+
 If the backend cannot reach MongoDB it exits immediately with a clear
-message instead of starting a server whose auth routes can never work.
+message instead of starting a server whose routes can never work.
 
 ## API reference
 
@@ -127,14 +162,12 @@ also return `errors: [{ field, message }]`.
 | Method | Endpoint | Auth | Body | Notes |
 | ------ | -------- | ---- | ---- | ----- |
 | GET | `/api/health` | No | — | Server health check |
-| POST | `/api/auth/register` | No | `{ name, email, password }` | Password ≥ 8 chars. Returns `{ token, user }` |
-| POST | `/api/auth/login` | No | `{ email, password }` | Same error for unknown user / wrong password |
+| GET | `/api/setup/status` | No | — | `{ needsSetup: true/false }` — true while no user exists |
+| POST | `/api/setup` | No | `{ companyName, adminName, adminEmail, adminPassword }` | Creates company + first ADMIN + default leave types. 403 once a user exists |
+| POST | `/api/auth/login` | No | `{ email, password }` | Same error for unknown user / wrong password. Returns `{ token, user }` |
 | POST | `/api/auth/logout` | Yes | — | JWTs are stateless; the frontend also deletes its token |
-| GET | `/api/users/me` | Yes | — | Logged-in user's profile |
-| GET | `/api/items` | Yes | — | Only the caller's own items, newest first |
-| POST | `/api/items` | Yes | `{ title, description?, completed? }` | |
-| PUT | `/api/items/:id` | Yes | Any of `{ title, description, completed }` | At least one field; only the owner's items |
-| DELETE | `/api/items/:id` | Yes | — | Only the owner's items |
+| GET | `/api/users/me` | Yes | — | Logged-in user's profile (password never included) |
+| GET | `/api/users` | Yes, ADMIN only | — | All users (no passwords). Other roles get 403 |
 
 Authenticated requests send `Authorization: Bearer <token>`. The frontend
 does this automatically (see `frontend/src/api/client.js`); on a 401 the
@@ -143,22 +176,23 @@ token is cleared and the user is treated as logged out.
 ## Project structure
 
 ```text
-hackathon-boilerplate/
+hcm-lite/
 ├── README.md
 ├── package.json                  # Root scripts only (dev, install:all)
 ├── backend/
 │   ├── package.json
 │   ├── .env.example
+│   ├── api/index.js              # Vercel serverless entry (deployment only)
+│   ├── vercel.json
 │   └── src/
-│       ├── server.js             # Entry point: connects DB, then listens
+│       ├── server.js             # Entry point: connects DB, optional auto-seed, then listens
 │       ├── app.js                # Express app: middleware, routes, errors
-│       ├── config/
-│       │   ├── env.js            # Loads + validates environment variables
-│       │   └── db.js             # Mongoose connection
-│       ├── models/               # Mongoose schemas (User, Item)
-│       ├── controllers/          # One file per resource, no route logic
-│       ├── routes/               # One file per resource, no business logic
-│       ├── middleware/           # auth (JWT), validate (Zod), errorHandler, rateLimit
+│       ├── config/               # env.js (loads + validates env), db.js (Mongoose)
+│       ├── models/               # User, Setting, Department, Designation, LeaveType, Holiday
+│       ├── controllers/          # auth, setup, user
+│       ├── routes/               # authRoutes, setupRoutes, userRoutes
+│       ├── services/             # setupService (shared by /setup and env auto-seed)
+│       ├── middleware/           # auth (JWT), requireRole, validate (Zod), errorHandler, rateLimit
 │       ├── validation/           # Zod schemas per resource
 │       └── utils/                # asyncHandler, ApiError, generateToken
 └── frontend/
@@ -167,53 +201,32 @@ hackathon-boilerplate/
     ├── .env.example
     └── src/
         ├── main.jsx              # Router + AuthProvider bootstrap
-        ├── App.jsx               # All routes (add yours here)
-        ├── index.css             # Plain CSS, no framework to configure
-        ├── api/                  # client.js (axios + token), auth.js, items.js
-        ├── context/AuthContext.jsx  # user, login, register, logout
+        ├── App.jsx               # All routes (role-guarded dashboard shells)
+        ├── index.css             # Plain CSS, no framework
+        ├── api/                  # client.js (axios + token), auth.js, setup.js
+        ├── context/AuthContext.jsx  # user, login, logout
         ├── components/           # Layout, Navbar, ProtectedRoute, ui/*
-        ├── pages/                # Home, Login, Register, Dashboard, NotFound
+        ├── pages/                # Home, Setup, Login, Dashboard, Admin/HR/Employee dashboards, NotFound
         └── utils/errors.js       # One readable message from any API error
 ```
 
-## Adding a feature (the pattern to copy)
-
-The `Item` resource is a complete template. To add, say, a `Project`:
-
-1. **Backend model** — copy `backend/src/models/Item.js` → `Project.js`
-   and change the fields. Keep an `owner` field if it belongs to a user.
-2. **Backend validation** — add a Zod schema in
-   `backend/src/validation/projectValidation.js`.
-3. **Backend controller + route** — copy `itemController.js` /
-   `itemRoutes.js`, rename, and keep every query scoped to
-   `req.user._id` (see `findOwnedItem` for the pattern).
-4. **Wire the route** — in `backend/src/app.js`, add
-   `app.use('/api/projects', projectRoutes)`.
-5. **Frontend API module** — copy `frontend/src/api/items.js` →
-   `projects.js` and change the path.
-6. **Frontend page + route** — copy a page in `frontend/src/pages/`,
-   add a `<Route>` in `App.jsx`, and wrap it in `<ProtectedRoute>` if it
-   needs a login (see the dashboard route).
-
-Delete `Item` and its dashboard demo once your real features replace it —
-they are scaffolding, not part of your product.
-
 ## How auth works
 
-1. Register/login returns a JWT (`{ token, user }`). Passwords are never
+1. Setup (or login) returns a JWT (`{ token, user }`). Passwords are never
    returned: the schema marks `password` as `select: false` and strips it
    from JSON output.
-2. The frontend stores the token in `localStorage` under `hackathon_token`
+2. The frontend stores the token in `localStorage` under `hcm_lite_token`
    and the axios interceptor attaches it to every request.
 3. On app load, `AuthContext` calls `GET /api/users/me` to restore the
    session from the stored token. If the token expired, it is cleared.
 4. `ProtectedRoute` renders a loader while that check runs, redirects to
-   `/login` when there is no user, and otherwise renders the page.
+   `/login` when there is no user, redirects a wrong-role user to
+   `/dashboard`, and otherwise renders the page.
 5. Logout calls `POST /api/auth/logout` (best effort) and deletes the
    token locally. Because JWTs are stateless, there is nothing to revoke
    server-side — deleting the token *is* the logout.
 
-## Security notes (and what this does not do)
+## Security notes (and what this does not do yet)
 
 - Passwords are hashed with bcrypt before saving, and only re-hashed when
   the password itself changes.
@@ -222,10 +235,9 @@ they are scaffolding, not part of your product.
   request bodies are capped at 100 KB.
 - Login returns the same message for an unknown email and a wrong
   password, so attackers cannot probe which emails are registered.
-- This template has **no** email verification, password reset, refresh
-  tokens, or roles — add them only if your hackathon project needs them.
-  In production, always serve the backend over HTTPS, set a real
-  `JWT_SECRET`, and restrict Atlas network access to your server's IP.
+- This phase has **no** email verification, password reset, refresh
+  tokens, employee management, attendance, leave, payroll, dashboards
+  with real data, AI assistant, or audit log — those arrive in P1–P4.
 
 ## Deployment (sketch)
 
@@ -257,5 +269,5 @@ they are scaffolding, not part of your product.
 | Frontend shows "Cannot reach the backend" | Backend is not running on :5000, or you are on a page that calls the API before it started |
 | CORS error in the browser console | `CLIENT_URL` in `backend/.env` does not match the frontend origin |
 | Logged out after refresh / "token is invalid or expired" | `JWT_SECRET` changed, or the token passed `JWT_EXPIRES_IN` — log in again |
-| Register returns field errors | The Zod schema rejected the input — the response lists every bad field |
+| Setup returns 403 | A user already exists — setup runs exactly once. To re-run it, use an empty database |
 | Port already in use | Another dev server is running — stop it, or change `PORT` / Vite's port |

@@ -49,7 +49,8 @@ export default function Login() {
           {busy ? 'Logging in…' : 'Login'}
         </Button>
         <p className="muted">
-          No account? <Link to="/register">Register</Link>
+          First time here? <Link to="/setup">Set up HCM Lite</Link> — it creates
+          the company and the first Admin account.
         </p>
       </form>
     </Card>
