@@ -6,6 +6,12 @@ import Card from '../components/ui/Card.jsx';
 import DashboardAiSummary from '../components/DashboardAiSummary.jsx';
 import DashboardFilters from '../components/DashboardFilters.jsx';
 import Rate from '../components/Rate.jsx';
+import PageHeader from '../components/ui/PageHeader.jsx';
+import KpiCard from '../components/ui/KpiCard.jsx';
+import { HBarChart } from '../components/Charts.jsx';
+import { PageSkeleton } from '../components/ui/Skeleton.jsx';
+import EmptyState from '../components/ui/EmptyState.jsx';
+import ErrorState from '../components/ui/ErrorState.jsx';
 import { getErrorMessage } from '../utils/errors.js';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -31,37 +37,36 @@ export default function AdminDashboard() {
   useEffect(() => { load(); }, []);
   return (
     <>
-      <h1>Admin dashboard</h1>
-      <p className="muted">Signed in as {user?.email} · Role: ADMIN</p>
-      <DashboardFilters filters={filters} setFilters={setFilters} departments={departments} onApply={load} />
-      {error && <p className="alert alert-error">{error}</p>}
-      {loading && <p className="muted">Loading dashboard…</p>}
-      {!loading && !data && !error && <p className="muted">No dashboard data yet.</p>}
+      <PageHeader title="Admin dashboard" subtitle={`Signed in as ${user?.email} · Role: ADMIN`} />
+      <DashboardFilters filters={filters} setFilters={setFilters} departments={departments} onApply={load} loading={loading} />
+      {error && <ErrorState message={error} onRetry={load} />}
+      {loading && <PageSkeleton />}
+      {!loading && !data && !error && <EmptyState icon="▦" title="No dashboard data yet" text="Once employees and payroll exist, this dashboard fills in from the server." actionLabel="Register an employee" actionTo="/employees" />}
       {data && (
         <>
-          <Card title="Headcount & attrition">
-            <ul className="item-list">
-              <li><span>Headcount (at {data.filters.to})</span><span>{data.headcount}</span></li>
-              <li><span>Headcount (at period start)</span><span>{data.headcountAtPeriodStart}</span></li>
-              <li><span>Exits this year</span><span>{data.exitsYtd}</span></li>
-              <li><span>Attrition YTD</span><span><Rate value={data.attritionYtd} /></span></li>
-            </ul>
-          </Card>
+          <div className="kpi-grid">
+            <KpiCard label={`Headcount (at ${data.filters.to})`} value={data.headcount} />
+            <KpiCard label="Headcount (at period start)" value={data.headcountAtPeriodStart} />
+            <KpiCard label="Exits this year" value={data.exitsYtd} />
+            <KpiCard label="Attrition YTD" value={<Rate value={data.attritionYtd} />} />
+            <KpiCard label="Payroll cost (net, finalized only)" value={`Rs ${data.payrollCost}`} />
+            <KpiCard label="Finalized runs in range" value={data.finalizedRunsInRange} />
+          </div>
           <Card title="Payroll (finalized runs only)">
             <ul className="item-list">
-              <li><span>Payroll cost (net pay)</span><span>Rs {data.payrollCost}</span></li>
               <li><span>Gross payable</span><span>Rs {data.grossPayable}</span></li>
-              <li><span>Finalized runs in range</span><span>{data.finalizedRunsInRange}</span></li>
               <li><span>Average basic salary</span><span>{data.averageSalary === null ? 'No data yet' : `Rs ${data.averageSalary}`}</span></li>
             </ul>
           </Card>
           <Card title="Headcount by department">
-            {data.headcountByDepartment.length === 0 ? <p className="muted">No data yet — no active employees in this range.</p> : (
+            <HBarChart data={data.headcountByDepartment} label={(r) => r.name} value={(r) => r.count} format={(v) => `${v} people`} />
+            {data.headcountByDepartment.length > 0 && (
               <ul className="item-list">{data.headcountByDepartment.map((r) => <li key={r.name}><span>{r.name}</span><span>{r.count} · avg Rs {r.averageBasicSalary}</span></li>)}</ul>
             )}
           </Card>
           <Card title="Payroll cost by department (net pay)">
-            {data.payrollCostByDepartment.length === 0 ? <p className="muted">No finalized payroll in this range yet.</p> : (
+            <HBarChart data={data.payrollCostByDepartment} label={(r) => r.department} value={(r) => r.payrollCost} format={(v) => `Rs ${v}`} />
+            {data.payrollCostByDepartment.length > 0 && (
               <ul className="item-list">{data.payrollCostByDepartment.map((r) => <li key={r.department}><span>{r.department}</span><span>Rs {r.payrollCost} · {r.employees} payslips</span></li>)}</ul>
             )}
           </Card>
@@ -76,7 +81,7 @@ export default function AdminDashboard() {
             )}
           </Card>
           <Card title="Tenure (from joining date)">
-            <ul className="item-list">{data.tenureDistribution.map((r) => <li key={r.bucket}><span>{r.bucket}</span><span>{r.count}</span></li>)}</ul>
+            <HBarChart data={data.tenureDistribution} label={(r) => r.bucket} value={(r) => r.count} format={(v) => `${v} people`} />
           </Card>
           <Card title="Gender breakdown">
             <p className="muted">Not collected — employee records do not include a gender field, so no breakdown is shown. This is not missing data; it was never asked for.</p>

@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import Button from '../components/ui/Button.jsx';
 import Card from '../components/ui/Card.jsx';
 import Input from '../components/ui/Input.jsx';
+import PageHeader from '../components/ui/PageHeader.jsx';
 import { getErrorMessage } from '../utils/errors.js';
 
 export default function ChangePassword() {
@@ -28,7 +29,9 @@ export default function ChangePassword() {
     finally { setBusy(false); }
   };
   return (
-    <Card title="Change password">
+    <>
+      <PageHeader title="Change password" subtitle="Accounts created by Admin/HR start with a temporary password and must be changed on first sign-in." />
+      <Card title="Change password">
       <p className="muted">Accounts created by Admin/HR start with a temporary password and must be changed on first sign-in.</p>
       <form onSubmit={handleSubmit} className="form">
         {error && <p className="alert alert-error">{error}</p>}
@@ -38,6 +41,7 @@ export default function ChangePassword() {
         <Button type="submit" disabled={busy}>{busy ? 'Changing…' : 'Change password'}</Button>
         {done && <Button variant="ghost" onClick={() => navigate('/dashboard')}>Back to dashboard</Button>}
       </form>
-    </Card>
+      </Card>
+    </>
   );
 }

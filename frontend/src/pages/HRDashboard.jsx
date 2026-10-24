@@ -6,6 +6,12 @@ import Card from '../components/ui/Card.jsx';
 import DashboardAiSummary from '../components/DashboardAiSummary.jsx';
 import DashboardFilters from '../components/DashboardFilters.jsx';
 import Rate from '../components/Rate.jsx';
+import PageHeader from '../components/ui/PageHeader.jsx';
+import KpiCard from '../components/ui/KpiCard.jsx';
+import { HBarChart, LineChart } from '../components/Charts.jsx';
+import { PageSkeleton } from '../components/ui/Skeleton.jsx';
+import EmptyState from '../components/ui/EmptyState.jsx';
+import ErrorState from '../components/ui/ErrorState.jsx';
 import { getErrorMessage } from '../utils/errors.js';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -31,50 +37,54 @@ export default function HRDashboard() {
   useEffect(() => { load(); }, []);
   return (
     <>
-      <h1>HR dashboard</h1>
-      <p className="muted">Signed in as {user?.email} · Role: {user?.role}</p>
-      <DashboardFilters filters={filters} setFilters={setFilters} departments={departments} onApply={load} />
-      {error && <p className="alert alert-error">{error}</p>}
-      {loading && <p className="muted">Loading dashboard…</p>}
-      {!loading && !data && !error && <p className="muted">No dashboard data yet.</p>}
+      <PageHeader title="HR dashboard" subtitle={`Signed in as ${user?.email} · Role: ${user?.role}`} />
+      <DashboardFilters filters={filters} setFilters={setFilters} departments={departments} onApply={load} loading={loading} />
+      {error && <ErrorState message={error} onRetry={load} />}
+      {loading && <PageSkeleton />}
+      {!loading && !data && !error && <EmptyState icon="▦" title="No dashboard data yet" text="Once employees check in and take leave, this dashboard fills in from the server." actionLabel="View employees" actionTo="/employees" />}
       {data && (
         <>
+          <div className="kpi-grid">
+            <KpiCard label="Headcount" value={data.headcount} />
+            <KpiCard label="Checked in today" value={data.today.checkedIn} sub={`present ${data.today.present} · late ${data.today.late} · half day ${data.today.halfDay} · missing checkout ${data.today.missingCheckout}`} />
+            <KpiCard label="On leave today" value={data.today.onLeave} />
+            <KpiCard label="Absent today" value={data.today.absent} />
+            <KpiCard label="Attendance rate" value={<Rate value={data.attendanceRate} />} />
+            <KpiCard label="Late rate" value={<Rate value={data.lateRate} />} />
+            <KpiCard label="Pending leave approvals" value={data.pendingLeaveApprovals} />
+            <KpiCard label="Pending attendance corrections" value={data.pendingAttendanceCorrections} />
+          </div>
           <Card title={`Today (${data.today.date})${data.today.isWorkingDay ? '' : ' — not a working day'}`}>
-            <ul className="item-list">
-              <li><span>Headcount</span><span>{data.headcount}</span></li>
-              <li><span>Checked in</span><span>{data.today.checkedIn} (present {data.today.present} · late {data.today.late} · half day {data.today.halfDay} · missing checkout {data.today.missingCheckout})</span></li>
-              <li><span>On leave today</span><span>{data.today.onLeave}</span></li>
-              <li><span>Absent today</span><span>{data.today.absent}</span></li>
-              <li><span>Pending leave approvals</span><span>{data.pendingLeaveApprovals}</span></li>
-              <li><span>Pending attendance corrections</span><span>{data.pendingAttendanceCorrections}</span></li>
-            </ul>
-          </Card>
-          <Card title="Attendance in range">
-            <ul className="item-list">
-              <li><span>Attendance rate</span><span><Rate value={data.attendanceRate} /></span></li>
-              <li><span>Late rate</span><span><Rate value={data.lateRate} /></span></li>
-              <li><span>Present / late / half / missing checkout / absent / on leave</span><span>{data.attendanceTotals.present} / {data.attendanceTotals.late} / {data.attendanceTotals.halfDay} / {data.attendanceTotals.missingCheckout} / {data.attendanceTotals.absent} / {data.attendanceTotals.onLeave}</span></li>
-            </ul>
+            <p className="muted">Present / late / half / missing checkout / absent / on leave in range: {data.attendanceTotals.present} / {data.attendanceTotals.late} / {data.attendanceTotals.halfDay} / {data.attendanceTotals.missingCheckout} / {data.attendanceTotals.absent} / {data.attendanceTotals.onLeave}</p>
           </Card>
           <Card title="Attendance trend (working days)">
             {data.attendanceTrend.length === 0 ? <p className="muted">No working days in this range.</p> : (
+              <LineChart
+                xLabels={data.attendanceTrend.map((d) => d.date.slice(5))}
+                series={[
+                  { label: 'Present', lineClass: 'chart-line', points: data.attendanceTrend.map((d) => ({ y: d.present })) },
+                  { label: 'Late', lineClass: 'chart-line-2', dotClass: 'chart-dot-2', points: data.attendanceTrend.map((d) => ({ y: d.late })) },
+                ]}
+              />
+            )}
+            {data.attendanceTrend.length > 0 && (
               <ul className="item-list">{data.attendanceTrend.map((d) => <li key={d.date}><span>{d.date}</span><span>present {d.present} · late {d.late} · half {d.halfDay} · missing {d.missingCheckout} · absent {d.absent} · leave {d.onLeave}</span></li>)}</ul>
             )}
           </Card>
           <Card title="Absenteeism by department">
-            {data.absenteeismByDepartment.length === 0 ? <p className="muted">No data yet.</p> : (
+            <HBarChart data={data.absenteeismByDepartment} label={(r) => r.department} value={(r) => Math.round((r.absenteeismRate || 0) * 100)} format={(v) => `${v}%`} />
+            {data.absenteeismByDepartment.length > 0 && (
               <ul className="item-list">{data.absenteeismByDepartment.map((r) => <li key={r.department}><span>{r.department}</span><span><Rate value={r.absenteeismRate} /> · {r.absentDays} absent of {r.expectedWorkingDays} due days</span></li>)}</ul>
             )}
           </Card>
           <Card title="Leave by type (approved days in range)">
-            {data.leaveByType.length === 0 ? <p className="muted">No leave types yet.</p> : (
+            <HBarChart data={data.leaveByType} label={(r) => r.leaveType.name} value={(r) => r.approvedDays} format={(v) => `${v} days`} />
+            {data.leaveByType.length > 0 && (
               <ul className="item-list">{data.leaveByType.map((r) => <li key={r.leaveType._id}><span>{r.leaveType.name}</span><span>{r.approvedDays} days · utilization <Rate value={r.utilization} />{r.quota === null ? ' (unlimited)' : ` of ${r.quota}`}</span></li>)}</ul>
             )}
           </Card>
           <Card title="Top 5 late-comers in range">
-            {data.topLateComers.length === 0 ? <p className="muted">No late check-ins in this range.</p> : (
-              <ul className="item-list">{data.topLateComers.map((r) => <li key={r.employeeId}><span>{r.name} ({r.employeeCode}) · {r.department}</span><span>{r.lateDays} late days</span></li>)}</ul>
-            )}
+            <HBarChart data={data.topLateComers} label={(r) => `${r.name} (${r.employeeCode})`} value={(r) => r.lateDays} format={(v) => `${v} late days`} maxBars={5} />
           </Card>
           <Card title="Pending leave approvals">
             {data.pendingLeaves.length === 0 ? <p className="muted">No pending leave requests.</p> : (

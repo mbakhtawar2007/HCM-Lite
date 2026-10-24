@@ -4,6 +4,8 @@ import { getSetupStatus, runSetup } from '../api/setup.js';
 import Button from '../components/ui/Button.jsx';
 import Card from '../components/ui/Card.jsx';
 import Input from '../components/ui/Input.jsx';
+import PageHeader from '../components/ui/PageHeader.jsx';
+import { Skeleton } from '../components/ui/Skeleton.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { getErrorMessage } from '../utils/errors.js';
 
@@ -39,10 +41,12 @@ export default function Setup() {
     }
   };
 
-  if (!status && !error) return <p className="muted">Loading…</p>;
+  if (!status && !error) return <><PageHeader title="Set up HCM Lite" /><Skeleton lines={4} /></>;
 
   if (status && !status.needsSetup) {
     return (
+      <>
+      <PageHeader title="Set up HCM Lite" />
       <Card title="Setup already complete">
         <p className="muted">
           A company and Admin account already exist. Sign in to continue.
@@ -51,11 +55,14 @@ export default function Setup() {
           Go to login
         </Link>
       </Card>
+      </>
     );
   }
 
   return (
-    <Card title="Set up HCM Lite">
+    <>
+      <PageHeader title="Set up HCM Lite" subtitle="First run: name your company and create the first Admin account. This page only works until the first account exists." />
+      <Card title="Set up HCM Lite">
       <p className="muted">
         First run: name your company and create the first Admin account. This page
         only works until the first account exists.
@@ -93,6 +100,7 @@ export default function Setup() {
           {busy ? 'Setting up…' : 'Create company and Admin'}
         </Button>
       </form>
-    </Card>
+      </Card>
+    </>
   );
 }

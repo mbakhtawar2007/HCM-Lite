@@ -7,7 +7,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 const features = [
   { title: 'Three roles', text: 'Admin, HR and Employee, each with its own menu, data scope and dashboard. Roles are enforced on the server.' },
   { title: 'First-run setup', text: 'The app starts empty. Set up the company and the first Admin account, then build everything from real data — no dummy data.' },
-  { title: 'Core HR, then AI', text: 'P1 adds employees, attendance, leave and payroll. P2 adds dashboards. P3 adds the AI assistant on the same scoped data.' },
+  { title: 'Core HR, then AI', text: 'Employees, attendance, leave and payroll, server dashboards, and the AI assistant on the same scoped data — all live.' },
 ];
 
 export default function Home() {
@@ -63,12 +63,12 @@ export default function Home() {
         ))}
       </section>
 
-      <Card title="P0 status">
+      <Card title="What is live">
         <p>
-          Done in P0: first-run setup, role-based auth, organisation models
-          (Setting, Department, Designation, LeaveType, Holiday) and role
-          dashboard shells. Not yet built: employees, attendance, leave,
-          payroll, dashboards, AI and audit (P1–P6 — see README).
+          First-run setup, role-based auth, organisation setup, employees,
+          attendance, leave, payroll, server dashboards, the AI assistant,
+          audit, announcements and notifications. See the README for the
+          full done / not-done list.
         </p>
       </Card>
     </>

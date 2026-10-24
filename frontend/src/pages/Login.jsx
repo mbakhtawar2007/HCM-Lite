@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import Button from '../components/ui/Button.jsx';
 import Card from '../components/ui/Card.jsx';
 import Input from '../components/ui/Input.jsx';
+import PageHeader from '../components/ui/PageHeader.jsx';
 import { getErrorMessage } from '../utils/errors.js';
 
 export default function Login() {
@@ -29,7 +30,9 @@ export default function Login() {
   };
 
   return (
-    <Card title="Login">
+    <>
+      <PageHeader title="Login" subtitle="Sign in with the login created for you. First sign-in uses a temporary password." />
+      <Card title="Login">
       <form onSubmit={handleSubmit} className="form">
         {error && <p className="alert alert-error">{error}</p>}
         <Input
@@ -54,6 +57,7 @@ export default function Login() {
           the company and the first Admin account.
         </p>
       </form>
-    </Card>
+      </Card>
+    </>
   );
 }

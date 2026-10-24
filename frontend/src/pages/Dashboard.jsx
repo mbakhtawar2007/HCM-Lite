@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import Card from '../components/ui/Card.jsx';
+import PageHeader from '../components/ui/PageHeader.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 
 // Role-aware dashboard hub (P0 shell). No numbers are shown here:
@@ -16,15 +17,11 @@ export default function Dashboard() {
 
   return (
     <>
-      <h1>Welcome, {user?.name}</h1>
-      <p className="muted">
-        Signed in as {user?.email} · Role: {user?.role}
-        {user?.mustChangePassword ? ' · You must change your password on first sign-in (P1).' : ''}
-      </p>
+      <PageHeader title={`Welcome, ${user?.name}`} subtitle={`Signed in as ${user?.email} · Role: ${user?.role}${user?.mustChangePassword ? ' · You must change your password on first sign-in.' : ''}`} />
       <Card title={rolePage.label}>
         <p className="muted">
-          Employees, attendance, leave and payroll (P1), server-computed dashboards (P2), the AI assistant (P3),
-          and audit, announcements and notifications (P4) are all live. Open your role dashboard below.
+          Employees, attendance, leave and payroll, server-computed dashboards, the AI assistant,
+          and audit, announcements and notifications are all live. Open your role dashboard below.
         </p>
         <Link className="btn btn-primary" to={rolePage.path}>
           Open {rolePage.label.toLowerCase()}
