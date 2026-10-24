@@ -6,7 +6,7 @@ import {
   FRIENDLY_FALLBACK,
   chatWithTools,
   dashboardSummary,
-  salaryGuard,
+  salaryRefusal,
   smartLeave,
 } from '../services/aiService.js';
 
@@ -48,20 +48,20 @@ function notConfigured(res, startedAt, req, endpoint) {
 
 export const aiChat = asyncHandler(async (req, res) => {
   const startedAt = Date.now();
-  const { message, history } = req.body;
+  const { message, history, language } = req.body;
   // Friendly 503 before anything else, so a missing key is never a 500
   // and never depends on how many requests the user already made.
   if (!process.env.AI_API_KEY) return notConfigured(res, startedAt, req, 'chat');
   await checkRateLimit(req);
   // Hard guard BEFORE any LLM call: another person's salary/pay detail
   // is refused here, logged, and never reaches the model.
-  const refusal = salaryGuard(message, req.user.role);
+  const refusal = salaryRefusal(message);
   if (refusal) {
     await logAi(req, 'chat', [], true, 'refused: salary guard', startedAt);
     return res.status(200).json({ success: true, answer: refusal, refused: true, aiGenerated: false, toolsUsed: [], toolResults: [] });
   }
   try {
-    const result = await chatWithTools(req.user, message, history || []);
+    const result = await chatWithTools(req.user, message, history || [], { language });
     await logAi(req, 'chat', result.toolsUsed, true, null, startedAt);
     return res.status(200).json({ success: true, answer: result.answer, aiGenerated: true, toolsUsed: result.toolsUsed, toolResults: result.toolResults });
   } catch (err) {

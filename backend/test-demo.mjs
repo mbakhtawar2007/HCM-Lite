@@ -41,9 +41,13 @@ globalThis.fetch = async (url, opts) => {
       return contentMsg(JSON.stringify({ type: 'CASUAL', start: leaveStart, end: leaveEnd, reason: 'Wedding' }));
     }
     if (system.includes('dashboard insight bullets')) {
-      const kpiJson = userText.slice(userText.indexOf('{'));
+      // Phase 3 wraps the KPI JSON in <kpi-data> markers; extract the
+      // balanced JSON object (first { to last }) instead of slicing to
+      // the end of the prompt. The assertion below (bullets contain the
+      // supplied numbers) is unchanged.
+      const kpiMatch = userText.match(/\{[\s\S]*\}/);
       let kpi = {};
-      try { kpi = JSON.parse(kpiJson); } catch { /* fall through with empty kpi */ }
+      try { kpi = JSON.parse(kpiMatch ? kpiMatch[0] : '{}'); } catch { /* fall through with empty kpi */ }
       return contentMsg(`• Headcount is ${kpi.headcount ?? 'unknown'}.\n• Employees on leave: ${kpi.onLeave ?? 0}.\n• Attendance rate is ${kpi.attendanceRate ?? 'unknown'}.`);
     }
     return contentMsg('Office starts at 09:00 with 15 minutes of grace.');

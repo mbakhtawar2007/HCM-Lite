@@ -13,6 +13,7 @@ const router = express.Router();
 const chatSchema = z.object({
   message: z.string().trim().min(1).max(2000),
   history: z.array(z.object({ role: z.enum(['user', 'assistant']), content: z.string().min(1).max(2000) })).max(10).optional(),
+  language: z.enum(['en', 'ur']).optional(),
 });
 
 // KPI JSON is validated as an object of plain numbers/strings only:

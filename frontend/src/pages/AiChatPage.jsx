@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { aiChat } from '../api/ai.js';
 import Button from '../components/ui/Button.jsx';
 import Card from '../components/ui/Card.jsx';
@@ -15,6 +15,8 @@ export default function AiChatPage() {
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [language, setLanguage] = useState(() => localStorage.getItem('hcm-lite-ai-lang') || 'en');
+  useEffect(() => { localStorage.setItem('hcm-lite-ai-lang', language); }, [language]);
 
   const send = async (e) => {
     e.preventDefault();
@@ -24,7 +26,7 @@ export default function AiChatPage() {
     setMessages((m) => [...m, userMsg]);
     setText(''); setLoading(true); setError('');
     try {
-      const d = await aiChat(userMsg.content, history.map((m) => ({ role: m.role, content: m.content })));
+      const d = await aiChat(userMsg.content, history.map((m) => ({ role: m.role, content: m.content })), language);
       setMessages((m) => [...m, {
         role: 'assistant',
         content: d.answer,
@@ -57,6 +59,10 @@ export default function AiChatPage() {
             </li>
           ))}
         </ul>
+        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+          <Button type="button" variant={language === 'en' ? 'primary' : 'ghost'} onClick={() => setLanguage('en')}>English</Button>
+          <Button type="button" variant={language === 'ur' ? 'primary' : 'ghost'} onClick={() => setLanguage('ur')}>Roman Urdu</Button>
+        </div>
         <form onSubmit={send} className="form">
           <Input label="Message" required value={text} onChange={(e) => setText(e.target.value)} />
           <Button type="submit" disabled={loading}>{loading ? 'Thinking…' : 'Send'}</Button>
