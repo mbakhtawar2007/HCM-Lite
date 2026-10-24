@@ -3,6 +3,7 @@ import { getAdminDashboard } from '../api/dashboards.js';
 import { orgList } from '../api/p1.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import Card from '../components/ui/Card.jsx';
+import DashboardAiSummary from '../components/DashboardAiSummary.jsx';
 import DashboardFilters from '../components/DashboardFilters.jsx';
 import Rate from '../components/Rate.jsx';
 import { getErrorMessage } from '../utils/errors.js';
@@ -86,9 +87,7 @@ export default function AdminDashboard() {
             )}
             <p><a href="/announcements">All announcements</a></p>
           </Card>
-          <Card title="AI summary">
-            <p className="muted">Coming soon in P3 — the AI assistant is not connected yet, so no AI summary is shown. No summary text here is AI-generated.</p>
-          </Card>
+          <DashboardAiSummary kpi={{ headcount: data.headcount, headcountAtPeriodStart: data.headcountAtPeriodStart, exitsYtd: data.exitsYtd, attritionYtd: data.attritionYtd, payrollCost: data.payrollCost, grossPayable: data.grossPayable, finalizedRunsInRange: data.finalizedRunsInRange, averageSalary: data.averageSalary, from: data.filters.from, to: data.filters.to }} />
           <Card title="Recent audit feed">
             {data.auditFeed.length === 0 ? <p className="muted">No audit entries yet.</p> : (
               <ul className="item-list">{data.auditFeed.map((l) => <li key={l._id}><span>{l.action} {l.entity} · {l.actor?.name || 'System'}</span><span>{l.createdAt.slice(0, 10)}</span></li>)}</ul>

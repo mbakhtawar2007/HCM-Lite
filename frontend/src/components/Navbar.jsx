@@ -27,6 +27,7 @@ export default function Navbar() {
       <nav>
         <NavLink to="/">Home</NavLink>
         {user && <NavLink to="/dashboard">Dashboard</NavLink>}
+        {user && <NavLink to="/ai">AI assistant</NavLink>}
         {roleLink && <NavLink to={roleLink.to}>{roleLink.label}</NavLink>}
         {user && <NavLink to="/attendance">Attendance</NavLink>}
         {user && <NavLink to="/leaves">Leave</NavLink>}

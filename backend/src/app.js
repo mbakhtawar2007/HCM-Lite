@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import { env } from './config/env.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
+import aiRoutes from './routes/aiRoutes.js';
 import announcementRoutes from './routes/announcementRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import attendanceRoutes from './routes/attendanceRoutes.js';
@@ -28,6 +29,7 @@ app.get('/api/health', (_req, res) => {
   res.status(200).json({ success: true, message: 'API is running' });
 });
 
+app.use('/api/ai', aiRoutes);
 app.use('/api/announcements', announcementRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);

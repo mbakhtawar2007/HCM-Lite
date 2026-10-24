@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { applyLeave, cancelLeave, decideLeave, leaveBalances, listLeaves, orgList } from '../api/p1.js';
+import { aiSmartLeave } from '../api/ai.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import Button from '../components/ui/Button.jsx';
 import Card from '../components/ui/Card.jsx';
@@ -15,6 +16,29 @@ export default function LeavesPage() {
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
   const [form, setForm] = useState({ leaveType: '', startDate: '', endDate: '', reason: '' });
+  const [smartText, setSmartText] = useState('');
+  const [smartLoading, setSmartLoading] = useState(false);
+  // P3 smart leave: plain words -> pre-filled form. Nothing is applied
+  // here — the user still checks the form and presses Apply, and on any
+  // parse failure the normal form below is the fallback.
+  const runSmartLeave = async (e) => {
+    e.preventDefault();
+    if (!smartText.trim() || smartLoading) return;
+    setSmartLoading(true); setError('');
+    try {
+      const d = await aiSmartLeave(smartText.trim());
+      if (d.parseFailed) {
+        setMsg('Could not understand that leave request — please use the leave form below.');
+      } else if (d.leave) {
+        setForm({ leaveType: d.leave.leaveTypeId, startDate: d.leave.start, endDate: d.leave.end, reason: d.leave.reason });
+        setMsg(`Pre-filled from your message (${d.leave.workingDays} working days) — check it and press Apply. Nothing has been submitted yet.`);
+      }
+    } catch (err) {
+      if (err.response?.status === 503) setMsg('Smart leave is unavailable — the AI key has not been added yet. Please use the leave form below.');
+      else setError(getErrorMessage(err));
+    }
+    setSmartLoading(false);
+  };
   const load = () => {
     listLeaves().then((d) => setLeaves(d.leaves)).catch((e) => setError(getErrorMessage(e)));
     if (!isStaff) leaveBalances().then((d) => setBalances(d.balances)).catch(() => {});
@@ -34,6 +58,13 @@ export default function LeavesPage() {
         <>
           <Card title="My balances">
             <ul className="item-list">{balances.map((b) => <li key={b.leaveType._id}><span>{b.leaveType.name}</span><span>{b.quota === null ? 'Unlimited' : `${b.used} used · ${b.remaining} left of ${b.quota}`}{b.pending ? ` · ${b.pending} pending` : ''}</span></li>)}</ul>
+          </Card>
+          <Card title="Smart leave — describe it in plain words">
+            <form onSubmit={runSmartLeave} className="form">
+              <Input label="e.g. I need next Monday and Tuesday off for a wedding" required value={smartText} onChange={(e) => setSmartText(e.target.value)} />
+              <Button type="submit" disabled={smartLoading}>{smartLoading ? 'Understanding…' : 'Pre-fill form'}</Button>
+            </form>
+            <p className="muted">AI-generated suggestion only — check the dates and type below before you apply.</p>
           </Card>
           <Card title="Apply for leave">
             <form onSubmit={submit} className="form">

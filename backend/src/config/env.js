@@ -26,8 +26,12 @@ export const env = {
   adminPassword: process.env.ADMIN_PASSWORD || null,
   adminName: process.env.ADMIN_NAME || 'Admin',
   companyName: process.env.COMPANY_NAME || 'HCM Lite',
-  // AI (P3, set later). Read only by the backend, never by the browser.
+  // AI (P3). Read only by the backend, never by the browser. Note:
+  // aiService reads AI_* env vars fresh on every request (not from
+  // this snapshot) so the key/rate-limit can change without a restart.
   aiApiKey: process.env.AI_API_KEY || null,
+  aiBaseUrl: process.env.AI_BASE_URL || 'https://api.groq.com/openai/v1/chat/completions',
+  aiModel: process.env.AI_MODEL || 'openai/gpt-oss-120b',
   // One origin, or a comma-separated list.
   clientUrls: (process.env.CLIENT_URL || 'http://localhost:5173')
     .split(',')

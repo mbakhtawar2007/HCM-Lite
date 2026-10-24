@@ -3,6 +3,7 @@ import { getHrDashboard } from '../api/dashboards.js';
 import { orgList } from '../api/p1.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import Card from '../components/ui/Card.jsx';
+import DashboardAiSummary from '../components/DashboardAiSummary.jsx';
 import DashboardFilters from '../components/DashboardFilters.jsx';
 import Rate from '../components/Rate.jsx';
 import { getErrorMessage } from '../utils/errors.js';
@@ -86,9 +87,7 @@ export default function HRDashboard() {
             )}
             <p><a href="/announcements">All announcements</a></p>
           </Card>
-          <Card title="AI summary">
-            <p className="muted">Coming soon in P3 — the AI assistant is not connected yet, so no AI summary is shown.</p>
-          </Card>
+          <DashboardAiSummary kpi={{ headcount: data.headcount, attendanceRate: data.attendanceRate, lateRate: data.lateRate, present: data.attendanceTotals.present, late: data.attendanceTotals.late, absent: data.attendanceTotals.absent, onLeave: data.attendanceTotals.onLeave, workingDays: data.attendanceTotals.workingDays, pendingLeaveApprovals: data.pendingLeaveApprovals, pendingAttendanceCorrections: data.pendingAttendanceCorrections, from: data.filters.from, to: data.filters.to }} />
           <p><a href="/employees">Employees</a> · <a href="/attendance">Attendance board</a> · <a href="/leaves">Leave approvals</a> · <a href="/payroll">Payroll draft</a></p>
         </>
       )}

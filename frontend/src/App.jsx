@@ -2,6 +2,7 @@ import { Route, Routes } from 'react-router-dom';
 import Layout from './components/Layout.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import AdminDashboard from './pages/AdminDashboard.jsx';
+import AiChatPage from './pages/AiChatPage.jsx';
 import AnnouncementsPage from './pages/AnnouncementsPage.jsx';
 import AttendancePage from './pages/AttendancePage.jsx';
 import AuditPage from './pages/AuditPage.jsx';
@@ -34,6 +35,7 @@ export default function App() {
 
         <Route element={<ProtectedRoute />}>
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/ai" element={<AiChatPage />} />
           <Route path="/change-password" element={<ChangePassword />} />
           <Route path="/attendance" element={<AttendancePage />} />
           <Route path="/leaves" element={<LeavesPage />} />

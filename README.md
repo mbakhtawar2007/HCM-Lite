@@ -120,7 +120,10 @@ judge run, start from an empty database and use the `/setup` page.
 | `CLIENT_URL` | No | `http://localhost:5173` | CORS origin(s), comma-separated if several |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | No | — | Optional first-Admin auto-seed; only when no user exists |
 | `ADMIN_NAME` / `COMPANY_NAME` | No | `Admin` / `HCM Lite` | Used by the auto-seed only |
-| `AI_API_KEY` | No (P3) | — | Backend-only LLM key, set later; the browser never calls the AI provider |
+| `AI_API_KEY` | No (P3) | — | Backend-only LLM key (see "AI assistant (P3)" below); the browser never calls the AI provider |
+| `AI_BASE_URL` | No | `https://api.groq.com/openai/v1/chat/completions` | OpenAI-compatible provider endpoint |
+| `AI_MODEL` | No | `openai/gpt-oss-120b` | Groq free-tier model (llama-3.3-70b is no longer on Groq's free plans) |
+| `AI_RATE_LIMIT_PER_HOUR` | No | `20` | Max AI requests per user per hour, counted from `AiLog` rows |
 
 ### Frontend (`frontend/.env`)
 
@@ -238,6 +241,49 @@ hcm-lite/
 - This phase has **no** email verification, password reset, refresh
   tokens, employee management, attendance, leave, payroll, dashboards
   with real data, AI assistant, or audit log — those arrive in P1–P4.
+
+## AI assistant (P3)
+
+- **Chat (`/ai`, all roles):** `POST /api/ai/chat` with `{ message, history? }`.
+  The model answers policy questions only from the brief's rules
+  (summarised in the system prompt) or says it does not know, and answers
+  data questions only through tools — `get_headcount`,
+  `get_attendance_summary`, `get_late_comers`, `get_leave_summary`,
+  `get_my_leave_balance`, `get_payroll_summary`, `search_employees` —
+  which reuse the same services and role scope as the REST API (max 2
+  tool rounds). Every AI answer in the UI is labelled "AI-generated",
+  and every call is logged in `AiLog` (user, endpoint, tools used,
+  success/error, latency — never salary data or the key).
+- **Dashboard summary (Admin/HR dashboards, "Summarize" button):**
+  `POST /api/ai/dashboard-summary` sends only the KPI numbers already
+  displayed for the current filters; the model returns 3–5 bullets from
+  those numbers alone. If AI is unavailable, no bullets are fabricated —
+  the UI shows the unavailable state.
+- **Smart leave (Leave page):** `POST /api/ai/smart-leave` turns plain
+  words ("next Monday and Tuesday off for a wedding") into JSON
+  `{ type, start, end, reason }` using the server's current date,
+  validated against leave types and working days (retried once on bad
+  JSON, then the normal form is shown). It never creates a leave
+  request — the user checks the pre-filled form and presses Apply.
+- **Guardrails:** before any LLM call, a salary/pay request that is not
+  clearly about the requester's own pay is refused politely, logged, and
+  never sent to the model; tools never return salary fields, and an
+  employee's tools only ever see their own record. Provider calls have a
+  15 s timeout with a friendly fallback, and a ~20/hour per-user limit
+  counted from `AiLog` rows.
+- **Adding the key (the last step, done by you, never in chat or in a
+  file):** for the deployed backend, open the hosting provider's
+  environment settings (e.g. Vercel project → Settings → Environment
+  Variables), add `AI_API_KEY` with your own Groq key (free tier, no
+  card, from console.groq.com), and redeploy. For a local run, put it in
+  `backend/.env` instead. `AI_BASE_URL` and `AI_MODEL` are optional
+  overrides; the defaults above work with Groq's free tier.
+- **Without a key:** AI routes return a friendly `503 "AI not
+  configured"` and the frontend shows that state; dashboards, leave,
+  attendance and payroll all work normally.
+- **Not yet done:** P5 demo/docs polish and P6 bonus (camera
+  attendance) are still open; the AI provider is Groq by default and
+  any other OpenAI-compatible endpoint needs its own key and model name.
 
 ## Deployment (sketch)
 
