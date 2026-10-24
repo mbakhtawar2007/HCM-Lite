@@ -23,8 +23,7 @@ export default function Dashboard() {
       </p>
       <Card title={rolePage.label}>
         <p className="muted">
-          This is a P0 placeholder shell. Company data, attendance, leave and payroll
-          arrive in P1; server-computed KPIs arrive in P2.
+          Core HR flows are live in P1 (employees, attendance, leave, payroll); server-computed KPIs arrive in P2.
         </p>
         <Link className="btn btn-primary" to={rolePage.path}>
           Open {rolePage.label.toLowerCase()}

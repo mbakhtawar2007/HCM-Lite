@@ -8,18 +8,10 @@ export default function HRDashboard() {
     <>
       <h1>HR dashboard</h1>
       <p className="muted">Signed in as {user?.email} · Role: {user?.role}</p>
-      <Card title="Employees (P1)">
-        <p className="muted">Register employees, directory and Employee 360 — not yet built.</p>
-      </Card>
-      <Card title="Attendance board (P1)">
-        <p className="muted">Daily attendance and correction approvals — not yet built.</p>
-      </Card>
-      <Card title="Leave approvals (P1)">
-        <p className="muted">Approve or reject leave with a comment — not yet built.</p>
-      </Card>
-      <Card title="Payroll draft (P1)">
-        <p className="muted">Create and review the monthly payroll draft — not yet built. Admin finalizes it.</p>
-      </Card>
+      <Card title="Employees"><p><a href="/employees">Register employees, directory and Employee 360</a>, with CSV export and import dry-run.</p></Card>
+      <Card title="Attendance board"><p><a href="/attendance">Daily attendance and correction approvals</a>.</p></Card>
+      <Card title="Leave approvals"><p><a href="/leaves">Approve or reject leave with a comment</a> — the employee is notified.</p></Card>
+      <Card title="Payroll draft"><p><a href="/payroll">Create and review the monthly payroll draft</a> — Admin finalizes it.</p></Card>
     </>
   );
 }

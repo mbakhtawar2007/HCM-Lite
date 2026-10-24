@@ -28,6 +28,15 @@ export default function Navbar() {
         <NavLink to="/">Home</NavLink>
         {user && <NavLink to="/dashboard">Dashboard</NavLink>}
         {roleLink && <NavLink to={roleLink.to}>{roleLink.label}</NavLink>}
+        {user && <NavLink to="/attendance">Attendance</NavLink>}
+        {user && <NavLink to="/leaves">Leave</NavLink>}
+        {user && <NavLink to="/payroll">Payroll</NavLink>}
+        {user && <NavLink to="/notifications">Notifications</NavLink>}
+        {user && ['ADMIN', 'HR'].includes(user.role) && <NavLink to="/employees">Employees</NavLink>}
+        {user && ['ADMIN', 'HR'].includes(user.role) && <NavLink to="/settings">Settings</NavLink>}
+        {user?.role === 'ADMIN' && <NavLink to="/users">Users</NavLink>}
+        {user?.role === 'ADMIN' && <NavLink to="/audit">Audit</NavLink>}
+        {user?.mustChangePassword && <NavLink to="/change-password">Change password</NavLink>}
         {!user && (
           <>
             <NavLink to="/setup">Setup</NavLink>

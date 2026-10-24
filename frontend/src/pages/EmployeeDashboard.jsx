@@ -8,18 +8,9 @@ export default function EmployeeDashboard() {
     <>
       <h1>My dashboard</h1>
       <p className="muted">Signed in as {user?.email} · Role: EMPLOYEE</p>
-      <Card title="Check-in (P1)">
-        <p className="muted">Web check-in and check-out — not yet built.</p>
-      </Card>
-      <Card title="My attendance (P1)">
-        <p className="muted">Your own attendance calendar and correction requests — not yet built.</p>
-      </Card>
-      <Card title="My leave (P1)">
-        <p className="muted">Apply for leave, see your balance and history — not yet built.</p>
-      </Card>
-      <Card title="My payslips (P1)">
-        <p className="muted">Download your own payslips — not yet built.</p>
-      </Card>
+      <Card title="Check-in"><p><a href="/attendance">Web check-in and check-out</a>, plus your own attendance and correction requests.</p></Card>
+      <Card title="My leave"><p><a href="/leaves">Apply for leave, see your balance and history</a>.</p></Card>
+      <Card title="My payslips"><p><a href="/payroll">Download your own payslips</a> (finalized runs only).</p></Card>
     </>
   );
 }

@@ -9,18 +9,10 @@ export default function AdminDashboard() {
     <>
       <h1>Admin dashboard</h1>
       <p className="muted">Signed in as {user?.email} · Role: ADMIN</p>
-      <Card title="Company setup (P1)">
-        <p className="muted">Departments, designations, leave types, holidays and office rules — not yet built.</p>
-      </Card>
-      <Card title="Users (P1)">
-        <p className="muted">Create HR logins, deactivate or reset logins — not yet built.</p>
-      </Card>
-      <Card title="Payroll finalization (P1)">
-        <p className="muted">Finalize a monthly payroll prepared by HR — not yet built. Only Admin can lock it.</p>
-      </Card>
-      <Card title="Audit log (P1)">
-        <p className="muted">Every create, update, approve and finalize action — not yet built.</p>
-      </Card>
+      <Card title="Company setup"><p><a href="/settings">Departments, designations, leave types, holidays and office rules</a> — HR can view, only Admin can change.</p></Card>
+      <Card title="Users"><p><a href="/users">Create HR logins, deactivate or reset logins</a>.</p></Card>
+      <Card title="Payroll finalization"><p><a href="/payroll">Finalize a monthly payroll prepared by HR</a> — only Admin can lock it.</p></Card>
+      <Card title="Audit log"><p><a href="/audit">Every create, update, approve and finalize action</a> — read-only, never editable.</p></Card>
     </>
   );
 }

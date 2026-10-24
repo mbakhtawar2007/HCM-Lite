@@ -18,8 +18,9 @@ export default function Login() {
     setError('');
     setBusy(true);
     try {
-      await login(form);
-      navigate('/dashboard');
+      const data = await login(form);
+      // Temporary-password accounts must change on first sign-in.
+      navigate(data.user?.mustChangePassword ? '/change-password' : '/dashboard');
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
