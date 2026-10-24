@@ -49,8 +49,10 @@ export const recomputeRun = asyncHandler(async (req, res) => {
   const employees = await Employee.find({ isActive: true }).sort({ employeeCode: 1 });
   const lines = [];
   for (const emp of employees) lines.push(await buildPayrollLine(emp, year, month, setting, holidays));
+  const beforeRecompute = run.toJSON();
   run.lines = lines;
   await run.save();
+  await writeAudit(req, 'UPDATE', 'PayrollRun', run._id, beforeRecompute, run.toJSON());
   res.status(200).json({ success: true, run });
 });
 
@@ -76,7 +78,9 @@ export const deleteRun = asyncHandler(async (req, res) => {
   const run = await PayrollRun.findById(req.params.id);
   if (!run) throw notFoundError('Payroll run not found');
   lockCheck(run);
+  const beforeDelete = run.toJSON();
   await run.deleteOne();
+  await writeAudit(req, 'DELETE', 'PayrollRun', run._id, beforeDelete, null);
   res.status(200).json({ success: true, message: 'Draft payroll run deleted' });
 });
 

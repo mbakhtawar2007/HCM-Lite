@@ -61,5 +61,7 @@ export const changePassword = asyncHandler(async (req, res) => {
   user.password = req.body.newPassword;
   user.mustChangePassword = false;
   await user.save();
+  // Never log password values: only the fact that the password changed.
+  await writeAudit(req, 'UPDATE', 'User', user._id, { mustChangePassword: true }, { mustChangePassword: false });
   res.status(200).json({ success: true, message: 'Password changed' });
 });

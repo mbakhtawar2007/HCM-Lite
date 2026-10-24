@@ -80,7 +80,11 @@ export const updateEmployee = asyncHandler(async (req, res) => {
     if (Object.keys(req.body).some((k) => !['phone', 'address'].includes(k))) {
       throw forbidden('Employees may only edit their own phone and address');
     }
+    const beforeSelf = emp.toJSON();
     Object.assign(emp, allowed);
+    await emp.save();
+    await writeAudit(req, 'UPDATE', 'Employee', emp._id, beforeSelf, emp.toJSON());
+    return res.status(200).json({ success: true, employee: await populate(Employee.findById(emp._id)) });
   } else {
     const before = emp.toJSON();
     if (req.body.department && !(await Department.findById(req.body.department))) throw badRequest('Department not found');

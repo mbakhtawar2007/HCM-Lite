@@ -51,6 +51,9 @@ export const downloadPayslipPdf = async (runId, employeeId, month) => {
   const a = document.createElement('a'); a.href = url; a.download = `payslip-${month}-${employeeId}.pdf`; a.click(); URL.revokeObjectURL(url);
 };
 
-export const listAuditLogs = async () => (await api.get('/audit-logs')).data;
+export const listAuditLogs = async (params = {}) => (await api.get('/audit-logs', { params })).data;
+export const listAnnouncements = async () => (await api.get('/announcements')).data;
+export const createAnnouncement = async (data) => (await api.post('/announcements', data)).data;
+export const deleteAnnouncement = async (id) => (await api.delete(`/announcements/${id}`)).data;
 export const listNotifications = async () => (await api.get('/notifications')).data;
 export const markNotificationRead = async (id) => (await api.patch(`/notifications/${id}/read`)).data;

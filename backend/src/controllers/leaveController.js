@@ -89,8 +89,10 @@ export const cancelLeave = asyncHandler(async (req, res) => {
   const own = await ownEmployee(req.user._id);
   if (String(leave.employee) !== String(own._id)) throw forbidden('You can only cancel your own leave');
   if (leave.status !== 'PENDING') throw conflict('Only pending leave can be cancelled');
+  const beforeCancel = leave.toJSON();
   leave.status = 'CANCELLED';
   await leave.save();
+  await writeAudit(req, 'UPDATE', 'LeaveRequest', leave._id, beforeCancel, leave.toJSON());
   res.status(200).json({ success: true, leave });
 });
 

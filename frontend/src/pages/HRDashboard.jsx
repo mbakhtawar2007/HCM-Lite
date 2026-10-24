@@ -80,6 +80,12 @@ export default function HRDashboard() {
               <ul className="item-list">{data.pendingLeaves.map((l) => <li key={l._id}><span>{l.employee?.user?.name} · {l.leaveType?.name} · {l.startDate.slice(0, 10)} to {l.endDate.slice(0, 10)} · {l.workingDays} days</span><span><a href="/leaves">Decide</a></span></li>)}</ul>
             )}
           </Card>
+          <Card title="Announcements">
+            {data.announcements?.length === 0 ? <p className="muted">No announcements yet.</p> : (
+              <ul className="item-list">{(data.announcements || []).map((a) => <li key={a._id}><span><strong>{a.title}</strong> · {a.body}</span><span>{a.postedBy?.name || ''}</span></li>)}</ul>
+            )}
+            <p><a href="/announcements">All announcements</a></p>
+          </Card>
           <Card title="AI summary">
             <p className="muted">Coming soon in P3 — the AI assistant is not connected yet, so no AI summary is shown.</p>
           </Card>

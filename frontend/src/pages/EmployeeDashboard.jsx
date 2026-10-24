@@ -57,7 +57,10 @@ export default function EmployeeDashboard() {
             ) : <p className="muted">No finalized payslip yet — drafts are not shown to employees.</p>}
           </Card>
           <Card title="Announcements">
-            <p className="muted">No announcements yet. (Announcements arrive with the comms work; nothing is shown here until then.)</p>
+            {data.announcements?.length === 0 ? <p className="muted">No announcements yet.</p> : (
+              <ul className="item-list">{(data.announcements || []).map((a) => <li key={a._id}><span><strong>{a.title}</strong> · {a.body}</span><span>{a.postedBy?.name || ''}</span></li>)}</ul>
+            )}
+            <p><a href="/announcements">All announcements</a></p>
           </Card>
           <Card title="Ask my assistant">
             <p className="muted">Coming soon in P3 — the AI assistant is not connected yet, so no AI answers are shown here.</p>

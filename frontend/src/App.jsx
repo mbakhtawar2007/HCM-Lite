@@ -2,6 +2,7 @@ import { Route, Routes } from 'react-router-dom';
 import Layout from './components/Layout.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import AdminDashboard from './pages/AdminDashboard.jsx';
+import AnnouncementsPage from './pages/AnnouncementsPage.jsx';
 import AttendancePage from './pages/AttendancePage.jsx';
 import AuditPage from './pages/AuditPage.jsx';
 import ChangePassword from './pages/ChangePassword.jsx';
@@ -38,6 +39,7 @@ export default function App() {
           <Route path="/leaves" element={<LeavesPage />} />
           <Route path="/payroll" element={<PayrollPage />} />
           <Route path="/notifications" element={<NotificationsPage />} />
+          <Route path="/announcements" element={<AnnouncementsPage />} />
           <Route path="/employees/:id" element={<Employee360 />} />
         </Route>
         <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>

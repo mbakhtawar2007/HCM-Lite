@@ -99,3 +99,7 @@ export const payrollRunSchema = z.object({
   month: z.string().regex(/^\d{4}-\d{2}$/, 'Month must be YYYY-MM'),
 });
 export const importDryRunSchema = z.object({ csv: z.string().min(1) });
+export const announcementSchema = z.object({
+  title: z.string().trim().min(2).max(200),
+  body: z.string().trim().min(1).max(5000),
+});

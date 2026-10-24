@@ -80,6 +80,12 @@ export default function AdminDashboard() {
           <Card title="Gender breakdown">
             <p className="muted">Not collected — employee records do not include a gender field, so no breakdown is shown. This is not missing data; it was never asked for.</p>
           </Card>
+          <Card title="Announcements">
+            {data.announcements?.length === 0 ? <p className="muted">No announcements yet.</p> : (
+              <ul className="item-list">{(data.announcements || []).map((a) => <li key={a._id}><span><strong>{a.title}</strong> · {a.body}</span><span>{a.postedBy?.name || ''}</span></li>)}</ul>
+            )}
+            <p><a href="/announcements">All announcements</a></p>
+          </Card>
           <Card title="AI summary">
             <p className="muted">Coming soon in P3 — the AI assistant is not connected yet, so no AI summary is shown. No summary text here is AI-generated.</p>
           </Card>

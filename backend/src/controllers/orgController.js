@@ -23,7 +23,12 @@ export const updateSetting = asyncHandler(async (req, res) => {
 
 const crud = (Model, name) => ({
   list: asyncHandler(async (_req, res) => {
-    const items = await Model.find().sort({ createdAt: 1 }).populate('department');
+    // Only populate department for models that actually have that path:
+    // LeaveType has no department field, and populating it throws a
+    // StrictPopulateError (this 500'd GET /org/leave-types in P1).
+    const query = Model.find().sort({ createdAt: 1 });
+    if (Model.schema.path('department')) query.populate('department');
+    const items = await query;
     res.status(200).json({ success: true, count: items.length, items });
   }),
   create: asyncHandler(async (req, res) => {

@@ -43,6 +43,7 @@ import { Department } from '../models/Department.js';
 import { Employee } from '../models/Employee.js';
 import { Holiday } from '../models/Holiday.js';
 import { LeaveRequest } from '../models/LeaveRequest.js';
+import { Announcement } from '../models/Announcement.js';
 import { LeaveType } from '../models/LeaveType.js';
 import { PayrollRun } from '../models/PayrollRun.js';
 import { computeAttendanceStatus } from './attendanceService.js';
@@ -388,6 +389,8 @@ export async function getAdminDashboard(query) {
     headcountByDesignation: await headcountByGroup(to, departmentId, 'designation', 'designations', 'name'),
     payrollCostByDesignation: payroll.byDesignation,
     tenureDistribution: tenureBuckets(activeAtEnd, to),
+    announcements: await Announcement.find({ isActive: true }).sort({ createdAt: -1 }).limit(10).populate('postedBy', 'name email role'),
+    announcementsAvailable: true,
     // Employee has no gender field: a gender breakdown would be invented
     // data, so it is honestly reported as not collected.
     genderBreakdown: { available: false, reason: 'Employee records do not collect gender.' },
@@ -457,6 +460,8 @@ export async function getHrDashboard(query) {
     leaveByType: leave.byType,
     leaveByDepartment: leave.byDepartment,
     topLateComers: attendance.topLateComers,
+    announcements: await Announcement.find({ isActive: true }).sort({ createdAt: -1 }).limit(10).populate('postedBy', 'name email role'),
+    announcementsAvailable: true,
     aiSummary: { available: false, status: 'coming-soon', summary: null },
   };
 }
@@ -516,10 +521,8 @@ export async function getEmployeeDashboard(employee, query) {
     lateCount,
     leaveBalances: balances,
     lastPayslip,
-    // No Announcement model exists in P1; announcements are honestly
-    // empty here rather than invented. Adding announcements is deferred.
-    announcements: [],
-    announcementsAvailable: false,
+    announcements: await Announcement.find({ isActive: true }).sort({ createdAt: -1 }).limit(10).populate('postedBy', 'name email role'),
+    announcementsAvailable: true,
     askAssistant: { available: false, status: 'coming-soon' },
   };
 }

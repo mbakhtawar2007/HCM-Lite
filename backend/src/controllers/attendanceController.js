@@ -26,8 +26,10 @@ export const checkOut = asyncHandler(async (req, res) => {
   const record = await Attendance.findOne({ employee: emp._id, date: todayDayStart() });
   if (!record) throw notFoundError('No check-in found for today');
   if (record.checkOut) throw conflict('Already checked out today');
+  const before = record.toJSON();
   record.checkOut = new Date();
   await record.save();
+  await writeAudit(req, 'UPDATE', 'Attendance', record._id, before, record.toJSON());
   res.status(200).json({ success: true, attendance: record });
 });
 
@@ -99,6 +101,7 @@ export const requestCorrection = asyncHandler(async (req, res) => {
     requestedCheckOut: req.body.requestedCheckOut ? new Date(req.body.requestedCheckOut) : null,
     reason: req.body.reason,
   });
+  await writeAudit(req, 'CREATE', 'AttendanceCorrection', correction._id, null, { attendance: String(attendance._id), reason: req.body.reason });
   res.status(201).json({ success: true, correction });
 });
 

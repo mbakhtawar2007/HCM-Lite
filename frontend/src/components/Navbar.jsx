@@ -32,6 +32,7 @@ export default function Navbar() {
         {user && <NavLink to="/leaves">Leave</NavLink>}
         {user && <NavLink to="/payroll">Payroll</NavLink>}
         {user && <NavLink to="/notifications">Notifications</NavLink>}
+        {user && <NavLink to="/announcements">Announcements</NavLink>}
         {user && ['ADMIN', 'HR'].includes(user.role) && <NavLink to="/employees">Employees</NavLink>}
         {user && ['ADMIN', 'HR'].includes(user.role) && <NavLink to="/settings">Settings</NavLink>}
         {user?.role === 'ADMIN' && <NavLink to="/users">Users</NavLink>}
