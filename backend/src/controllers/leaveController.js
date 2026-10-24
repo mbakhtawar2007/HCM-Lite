@@ -7,6 +7,7 @@ import { Holiday } from '../models/Holiday.js';
 import { getSetting, workingDaysBetween, workingDaysInYear, dayStart } from '../services/settingsService.js';
 import { notifyUser, writeAudit } from '../services/attendanceService.js';
 import { ownEmployee, scopedEmployee } from '../utils/scope.js';
+import { assertEnumQuery, assertObjectIdQuery } from '../utils/queryGuard.js';
 
 // Phase 1 fix: previously every approved leave overlapping a year
 // contributed its FULL workingDays to that year, so a leave spanning
@@ -39,6 +40,7 @@ async function pendingDays(employeeId, leaveTypeId, year, holidays, weekendDays)
 }
 
 export const getBalances = asyncHandler(async (req, res) => {
+  assertObjectIdQuery(req.query.employeeId, 'employeeId');
   let employeeId = req.query.employeeId;
   if (req.user.role === 'EMPLOYEE') {
     const own = await ownEmployee(req.user._id);
@@ -103,6 +105,8 @@ export const applyLeave = asyncHandler(async (req, res) => {
 });
 
 export const listLeaves = asyncHandler(async (req, res) => {
+  assertObjectIdQuery(req.query.employeeId, 'employeeId');
+  assertEnumQuery(req.query.status, ['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED'], 'status');
   const filter = {};
   if (req.user.role === 'EMPLOYEE') {
     const own = await ownEmployee(req.user._id);

@@ -19,7 +19,7 @@ export const runSetup = asyncHandler(async (req, res) => {
   const { setting } = await getSetupState();
   res.status(201).json({
     success: true,
-    token: generateToken(created.user._id),
+    token: generateToken(created.user._id, created.user.tokenVersion),
     user: created.user,
     setting,
   });

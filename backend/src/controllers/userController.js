@@ -30,6 +30,13 @@ export const updateUser = asyncHandler(async (req, res) => {
     throw badRequest('You cannot deactivate your own account');
   }
   const before = user.toJSON();
+  // Phase 2: toggling isActive invalidates existing tokens, so a
+  // reactivated account cannot silently revive an old (possibly
+  // compromised) token — the user must sign in fresh. A password reset
+  // already bumps the version via the User pre-save hook.
+  if (req.body.isActive !== undefined && req.body.isActive !== user.isActive) {
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
+  }
   Object.assign(user, req.body);
   await user.save();
   await writeAudit(req, 'UPDATE', 'User', user._id, before, user.toJSON());

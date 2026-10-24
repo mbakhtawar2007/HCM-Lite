@@ -11,7 +11,9 @@ import { PayrollRun } from '../models/PayrollRun.js';
 import { parseCsv } from '../services/csvService.js';
 import { csvEscape } from '../services/csvService.js';
 import { writeAudit } from '../services/attendanceService.js';
+import { escapeRegExp } from '../utils/escapeRegExp.js';
 import { ownEmployee, scopedEmployee } from '../utils/scope.js';
+import mongoose from 'mongoose';
 
 const populate = (q) => q.populate('department').populate('designation').populate('user', 'name email role isActive');
 
@@ -44,14 +46,26 @@ export const listEmployees = asyncHandler(async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page, 10) || 1);
   const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
   const filter = {};
-  if (req.query.department) filter.department = req.query.department;
-  if (req.query.designation) filter.designation = req.query.designation;
+  // Phase 2: query IDs are validated, never passed raw into a filter
+  // (with the old extended parser an object like department[$ne]=x
+  // could reach Mongoose as an operator). Invalid IDs are 400.
+  if (req.query.department) {
+    if (!mongoose.Types.ObjectId.isValid(req.query.department)) throw badRequest('department must be a valid id');
+    filter.department = req.query.department;
+  }
+  if (req.query.designation) {
+    if (!mongoose.Types.ObjectId.isValid(req.query.designation)) throw badRequest('designation must be a valid id');
+    filter.designation = req.query.designation;
+  }
   if (req.query.isActive !== undefined) filter.isActive = req.query.isActive === 'true';
   const q = (req.query.q || '').trim();
   let query = Employee.find(filter);
   if (q) {
-    const users = await User.find({ $or: [{ name: new RegExp(q, 'i') }, { email: new RegExp(q, 'i') }] }).select('_id');
-    query = Employee.find({ ...filter, $or: [{ employeeCode: new RegExp(q, 'i') }, { user: { $in: users.map((u) => u._id) } }] });
+    // Phase 2: escape the search string before RegExp — unescaped user
+    // input here was a regex-injection / ReDoS vector.
+    const safe = new RegExp(escapeRegExp(q), 'i');
+    const users = await User.find({ $or: [{ name: safe }, { email: safe }] }).select('_id');
+    query = Employee.find({ ...filter, $or: [{ employeeCode: safe }, { user: { $in: users.map((u) => u._id) } }] });
   }
   const total = await query.clone().countDocuments();
   const employees = await populate(query.sort({ createdAt: 1 }).skip((page - 1) * limit).limit(limit));

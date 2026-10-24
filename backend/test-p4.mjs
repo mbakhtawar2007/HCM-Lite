@@ -39,6 +39,10 @@ const hrId = r.json.user._id;
 let a = await audit('CREATE', 'User');
 check('audit CREATE User: before null, after has name/email', !!a && a.before === null && a.after?.email === 'hr@test.local', JSON.stringify(a));
 r = await call('POST', '/api/auth/login', null, { email: 'hr@test.local', password: 'TempHr123!' });
+const hrTempToken = r.json.token;
+// Phase 2: temp tokens cannot create employees, so change first.
+await call('POST', '/api/auth/change-password', hrTempToken, { currentPassword: 'TempHr123!', newPassword: 'NewHr123!' });
+r = await call('POST', '/api/auth/login', null, { email: 'hr@test.local', password: 'NewHr123!' });
 const hrToken = r.json.token;
 r = await call('POST', '/api/org/departments', adminToken, { name: 'Engineering' });
 const deptId = r.json.item._id;
@@ -51,7 +55,9 @@ async function makeEmployee(code, email, name) {
   });
   if (rr.status !== 201) throw new Error(`employee create failed: ${JSON.stringify(rr.json)}`);
   const login = await call('POST', '/api/auth/login', null, { email, password: 'TempEmp123!' });
-  return { id: rr.json.employee._id, userId: rr.json.employee.user._id || rr.json.employee.user, token: login.json.token };
+  await call('POST', '/api/auth/change-password', login.json.token, { currentPassword: 'TempEmp123!', newPassword: 'NewEmp123!' });
+  const login2 = await call('POST', '/api/auth/login', null, { email, password: 'NewEmp123!' });
+  return { id: rr.json.employee._id, userId: rr.json.employee.user._id || rr.json.employee.user, token: login2.json.token };
 }
 const empA = await makeEmployee('E001', 'empA@test.local', 'Emp A');
 const empB = await makeEmployee('E002', 'empB@test.local', 'Emp B');
@@ -63,11 +69,13 @@ a = await audit('UPDATE', 'User');
 check('audit UPDATE User: before old name, after new name', !!a && a.before?.name === 'HR One' && a.after?.name === 'HR Renamed', JSON.stringify(a));
 
 // --- Audit: change-password (no password values logged) ---
-r = await call('POST', '/api/auth/change-password', hrToken, { currentPassword: 'TempHr123!', newPassword: 'NewHr123!' });
+// (HR already changed TempHr123! -> NewHr123! above, Phase 2 flow;
+// this second change proves the audit entry contains no password.)
+r = await call('POST', '/api/auth/change-password', hrToken, { currentPassword: 'NewHr123!', newPassword: 'NewHr123!x' });
 check('HR change-password succeeds', r.status === 200, JSON.stringify(r.json));
 a = await AuditLog.findOne({ action: 'UPDATE', entity: 'User' }).sort({ createdAt: -1 });
 check('audit change-password logs no password value', !!a && !JSON.stringify(a.after).toLowerCase().includes('newhr123'), JSON.stringify(a.after));
-r = await call('POST', '/api/auth/login', null, { email: 'hr@test.local', password: 'NewHr123!' });
+r = await call('POST', '/api/auth/login', null, { email: 'hr@test.local', password: 'NewHr123!x' });
 const hrToken2 = r.json.token;
 
 // --- Audit: employee self-update ---

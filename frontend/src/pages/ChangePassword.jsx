@@ -9,6 +9,7 @@ import { getErrorMessage } from '../utils/errors.js';
 
 export default function ChangePassword() {
   const navigate = useNavigate();
+  const { logout } = useAuth();
   const [form, setForm] = useState({ currentPassword: '', newPassword: '' });
   const [error, setError] = useState('');
   const [done, setDone] = useState('');
@@ -17,7 +18,12 @@ export default function ChangePassword() {
     e.preventDefault(); setError(''); setDone(''); setBusy(true);
     try {
       await changePassword(form);
+      // Phase 2: a password change invalidates the old token, so the
+      // user must sign in fresh — don't leave them on a session that
+      // will 401 on its next request.
       setDone('Password changed. Please sign in again with your new password.');
+      await logout();
+      navigate('/login');
     } catch (err) { setError(getErrorMessage(err)); }
     finally { setBusy(false); }
   };

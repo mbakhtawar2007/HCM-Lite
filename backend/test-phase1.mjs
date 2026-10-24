@@ -90,9 +90,14 @@ const emp1 = await makeEmployee('EMP101', 'one@test.local', 'One Person');
 const emp2 = await makeEmployee('EMP102', 'two@test.local', 'Two Person');
 const emp3 = await makeEmployee('EMP103', 'three@test.local', 'Three Person');
 const future = await makeEmployee('EMP199', 'future@test.local', 'Future Person', '2026-12-01');
-const e1Token = await login('one@test.local', 'TempEmp123!');
-const e2Token = await login('two@test.local', 'TempEmp123!');
-const e3Token = await login('three@test.local', 'TempEmp123!');
+async function loginChanged(email, tempPw) {
+  const temp = await login(email, tempPw);
+  await call('POST', '/api/auth/change-password', temp, { currentPassword: tempPw, newPassword: 'NewEmp123!' });
+  return login(email, 'NewEmp123!');
+}
+const e1Token = await loginChanged('one@test.local', 'TempEmp123!');
+const e2Token = await loginChanged('two@test.local', 'TempEmp123!');
+const e3Token = await loginChanged('three@test.local', 'TempEmp123!');
 r = await call('GET', '/api/employees?q=Two', hrToken);
 check('directory server search', r.status === 200 && r.json.employees.length === 1 && r.json.employees[0].employeeCode === 'EMP102', JSON.stringify(r.json));
 r = await call('GET', '/api/employees?page=2&limit=1', hrToken);

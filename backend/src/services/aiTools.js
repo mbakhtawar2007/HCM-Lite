@@ -18,6 +18,7 @@ import {
 } from './dashboardService.js';
 import { dateKey, dayStart, getSetting, isHoliday, isWeekend } from './settingsService.js';
 import { ownEmployee } from '../utils/scope.js';
+import { escapeRegExp } from '../utils/escapeRegExp.js';
 
 // P3 — AI tools. Every tool reuses the same dashboard/leave/payroll
 // services and the same role scope as the REST API; there are no new
@@ -35,7 +36,7 @@ async function resolveDeptArg(department) {
     const byId = await Department.findById(department);
     if (byId) return byId;
   }
-  const byName = await Department.findOne({ name: new RegExp(`^${String(department).trim()}$`, 'i') });
+  const byName = await Department.findOne({ name: new RegExp(`^${escapeRegExp(String(department).trim())}$`, 'i') });
   return byName || null;
 }
 
@@ -272,8 +273,9 @@ export async function runAiTool(user, name, args = {}) {
         const populated = await Employee.findById(own._id).populate('department', 'name').populate('designation', 'name').populate('user', 'name email role');
         return { name, result: { scope: 'own', employees: [stripSalary(populated)] } };
       }
-      const users = await User.find({ $or: [{ name: new RegExp(q, 'i') }, { email: new RegExp(q, 'i') }] }).select('_id');
-      const emps = await Employee.find({ $or: [{ employeeCode: new RegExp(q, 'i') }, { user: { $in: users.map((u) => u._id) } }] })
+      const safe = new RegExp(escapeRegExp(q), 'i');
+      const users = await User.find({ $or: [{ name: safe }, { email: safe }] }).select('_id');
+      const emps = await Employee.find({ $or: [{ employeeCode: safe }, { user: { $in: users.map((u) => u._id) } }] })
         .populate('department', 'name').populate('designation', 'name').populate('user', 'name email role').limit(20);
       return { name, result: { employees: emps.map(stripSalary) } };
     }

@@ -89,8 +89,12 @@ const empCheck = await makeEmployee('EMP003', 'check@test.local', 'Check Person'
 const empOther = await makeEmployee('EMP004', 'other@test.local', 'Other Person');
 
 async function loginAs(email, pw = 'TempEmp123!') {
+  // Phase 2: temp-password tokens are blocked from other endpoints, so
+  // follow the forced-change flow here (temp login -> change -> login).
   const rr = await call('POST', '/api/auth/login', null, { email, password: pw });
-  return rr.json.token;
+  await call('POST', '/api/auth/change-password', rr.json.token, { currentPassword: pw, newPassword: 'NewEmp123!' });
+  const rr2 = await call('POST', '/api/auth/login', null, { email, password: 'NewEmp123!' });
+  return rr2.json.token;
 }
 const payToken = await loginAs('pay@test.local');
 const leaveToken = await loginAs('leave@test.local');

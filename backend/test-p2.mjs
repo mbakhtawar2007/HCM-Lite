@@ -47,6 +47,9 @@ let r = await call('POST', '/api/setup', null, { companyName: 'Test Co', adminNa
 const adminToken = r.json.token;
 r = await call('POST', '/api/users', adminToken, { name: 'HR One', email: 'hr@test.local', password: 'Hr123456!', role: 'HR' });
 r = await call('POST', '/api/auth/login', null, { email: 'hr@test.local', password: 'Hr123456!' });
+const hrTempToken = r.json.token;
+await call('POST', '/api/auth/change-password', hrTempToken, { currentPassword: 'Hr123456!', newPassword: 'HrNew123!' });
+r = await call('POST', '/api/auth/login', null, { email: 'hr@test.local', password: 'HrNew123!' });
 const hrToken = r.json.token;
 
 // --- Empty database dashboards: valid, no crashes, no NaN ---
@@ -97,7 +100,9 @@ check('inactive flag set', r.status === 200, JSON.stringify(r.json));
 
 async function loginAs(email) {
   const rr = await call('POST', '/api/auth/login', null, { email, password: 'TempEmp123!' });
-  return rr.json.token;
+  await call('POST', '/api/auth/change-password', rr.json.token, { currentPassword: 'TempEmp123!', newPassword: 'NewEmp123!' });
+  const rr2 = await call('POST', '/api/auth/login', null, { email, password: 'NewEmp123!' });
+  return rr2.json.token;
 }
 const e1Token = await loginAs('e1@test.local');
 const e3Token = await loginAs('e3@test.local');

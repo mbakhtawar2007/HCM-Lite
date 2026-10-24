@@ -80,6 +80,9 @@ let r = await call('POST', '/api/setup', null, { companyName: 'Test Co', adminNa
 const adminToken = r.json.token;
 r = await call('POST', '/api/users', adminToken, { name: 'HR One', email: 'hr@test.local', password: 'Hr123456!', role: 'HR' });
 r = await call('POST', '/api/auth/login', null, { email: 'hr@test.local', password: 'Hr123456!' });
+const hrTempToken = r.json.token;
+await call('POST', '/api/auth/change-password', hrTempToken, { currentPassword: 'Hr123456!', newPassword: 'HrNew123!' });
+r = await call('POST', '/api/auth/login', null, { email: 'hr@test.local', password: 'HrNew123!' });
 const hrToken = r.json.token;
 
 r = await call('POST', '/api/org/departments', adminToken, { name: 'Engineering' });
@@ -104,7 +107,9 @@ const e2 = await makeEmployee('EMP002', 'e2@test.local', engId, engDesig, 80000)
 const e3 = await makeEmployee('EMP003', 'e3@test.local', salesId, salesDesig, 60000);
 async function loginAs(email) {
   const rr = await call('POST', '/api/auth/login', null, { email, password: 'TempEmp123!' });
-  return rr.json.token;
+  await call('POST', '/api/auth/change-password', rr.json.token, { currentPassword: 'TempEmp123!', newPassword: 'NewEmp123!' });
+  const rr2 = await call('POST', '/api/auth/login', null, { email, password: 'NewEmp123!' });
+  return rr2.json.token;
 }
 const e1Token = await loginAs('e1@test.local');
 
@@ -188,6 +193,9 @@ check('employee cannot use dashboard summary (403)', r.status === 403, String(r.
 // --- Rate limit (limit lowered via env for a fresh user) --------------
 r = await call('POST', '/api/users', adminToken, { name: 'HR Two', email: 'hr2@test.local', password: 'Hr123456!', role: 'HR' });
 r = await call('POST', '/api/auth/login', null, { email: 'hr2@test.local', password: 'Hr123456!' });
+const hr2TempToken = r.json.token;
+await call('POST', '/api/auth/change-password', hr2TempToken, { currentPassword: 'Hr123456!', newPassword: 'Hr2New123!' });
+r = await call('POST', '/api/auth/login', null, { email: 'hr2@test.local', password: 'Hr2New123!' });
 const hr2Token = r.json.token;
 process.env.AI_RATE_LIMIT_PER_HOUR = '2';
 r = await call('POST', '/api/ai/chat', hr2Token, { message: 'What is the office start time?' });

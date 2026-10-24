@@ -8,6 +8,7 @@ import { Holiday } from '../models/Holiday.js';
 import { computeAttendanceStatus, todayDayStart, writeAudit } from '../services/attendanceService.js';
 import { getSetting, dayStart, dateKey, isWeekend, isHoliday, listWorkingDaysInMonth, haversineMeters } from '../services/settingsService.js';
 import { ownEmployee, scopedEmployee } from '../utils/scope.js';
+import { assertDateQuery, assertObjectIdQuery } from '../utils/queryGuard.js';
 
 // POST /api/attendance/check-in — server-stamped time, one record/day.
 // Phase 1 geofence: if the office location (officeLat/officeLng) and a
@@ -69,6 +70,9 @@ export const myAttendance = asyncHandler(async (req, res) => {
 export const listAttendance = asyncHandler(async (req, res) => {
   // HR/ADMIN: any employee. EMPLOYEE: only own (employeeId must be own).
   let employeeId = req.query.employeeId;
+  assertObjectIdQuery(employeeId, 'employeeId');
+  assertDateQuery(req.query.from, 'from');
+  assertDateQuery(req.query.to, 'to');
   if (req.user.role === 'EMPLOYEE') {
     const own = await ownEmployee(req.user._id);
     if (employeeId && String(employeeId) !== String(own._id)) throw forbidden('You can only access your own records');
@@ -91,6 +95,7 @@ export const listAttendance = asyncHandler(async (req, res) => {
 
 // GET /api/attendance/board?date=YYYY-MM-DD — HR/ADMIN daily board.
 export const dailyBoard = asyncHandler(async (req, res) => {
+  assertDateQuery(req.query.date, 'date');
   const setting = await getSetting();
   const holidays = await Holiday.find();
   const day = req.query.date ? dayStart(req.query.date) : todayDayStart();
@@ -129,6 +134,7 @@ export const requestCorrection = asyncHandler(async (req, res) => {
 });
 
 export const listCorrections = asyncHandler(async (req, res) => {
+  assertObjectIdQuery(req.query.employeeId, 'employeeId');
   const filter = {};
   if (req.user.role === 'EMPLOYEE') {
     const own = await ownEmployee(req.user._id);
