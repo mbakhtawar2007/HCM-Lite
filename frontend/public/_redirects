@@ -1,0 +1,7 @@
+# Single-page app fallback: every route is handled by React Router in
+# index.html. Without this, a direct load or refresh on /attendance,
+# /employees, etc. hits Netlify's static server and returns its 404.
+# This file was missing, which is why refresh on /attendance showed
+# Netlify's "Page not found" page. API calls are unaffected (they go
+# to the Vercel backend, not to this site).
+/*  /index.html  200
