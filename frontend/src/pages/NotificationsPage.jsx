@@ -15,7 +15,7 @@ export default function NotificationsPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const load = () => { setLoading(true); listNotifications().then(setData).catch((e) => setError(getErrorMessage(e))).finally(() => setLoading(false)); };
-  useEffect(load, []);
+  useEffect(() => { load(); }, []);
   return (
     <>
       <PageHeader title="Notifications" subtitle={`${data.unreadCount} unread — leave decisions and payslip availability appear here.`} />

@@ -37,7 +37,7 @@ export default function AttendancePage() {
       listCorrections().then((d) => setCorrections(d.corrections)).catch(() => {});
     }
   };
-  useEffect(load, []);
+  useEffect(() => { load(); }, []);
   const act = async (fn, ok) => { if (busy) return; setError(''); setMsg(''); setBusy(true); try { await fn(); setMsg(ok); load(); } catch (err) { setError(getErrorMessage(err)); } finally { setBusy(false); } };
   const getLocation = () => new Promise((resolve) => {
     if (!navigator.geolocation) return resolve(null);

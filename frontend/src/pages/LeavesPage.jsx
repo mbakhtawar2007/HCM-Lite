@@ -56,7 +56,7 @@ export default function LeavesPage() {
     if (!isStaff) leaveBalances().then((d) => setBalances(d.balances)).catch(() => {});
     orgList('leave-types').then((d) => setTypes(d.items)).catch(() => {});
   };
-  useEffect(load, []);
+  useEffect(() => { load(); }, []);
   const submit = async (e) => {
     e.preventDefault(); setError(''); setMsg(''); setFormError('');
     if (form.startDate && form.endDate && form.endDate < form.startDate) { setFormError('End date must be on or after the start date.'); return; }

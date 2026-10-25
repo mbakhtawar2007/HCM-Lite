@@ -19,7 +19,7 @@ export default function Employee360() {
   const [address, setAddress] = useState('');
   const [busy, setBusy] = useState(false);
   const load = () => getEmployee360(id).then((d) => { setData(d); setPhone(d.employee.phone || ''); setAddress(d.employee.address || ''); }).catch((e) => setError(getErrorMessage(e)));
-  useEffect(load, [id]);
+  useEffect(() => { load(); }, [id]);
   const saveContact = async (e) => {
     e.preventDefault(); setBusy(true);
     try { await updateEmployee(id, { phone, address }); load(); } catch (err) { setError(getErrorMessage(err)); }

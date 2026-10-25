@@ -26,7 +26,7 @@ export default function AnnouncementsPage() {
   const [busy, setBusy] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
   const load = () => { setLoading(true); listAnnouncements().then((d) => setAnnouncements(d.announcements)).catch((e) => setError(getErrorMessage(e))).finally(() => setLoading(false)); };
-  useEffect(load, []);
+  useEffect(() => { load(); }, []);
   const post = async (e) => {
     e.preventDefault(); setError(''); setMessage(''); setBusy(true);
     try {

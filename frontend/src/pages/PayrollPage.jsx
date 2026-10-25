@@ -32,7 +32,7 @@ export default function PayrollPage() {
     if (isStaff) listPayrollRuns().then((d) => setRuns(d.runs)).catch((e) => setError(getErrorMessage(e))).finally(() => setLoading(false));
     else myPayslips().then((d) => setMine(d.payslips)).catch((e) => setError(getErrorMessage(e))).finally(() => setLoading(false));
   };
-  useEffect(load, []);
+  useEffect(() => { load(); }, []);
   const open = async (id) => { try { setSelected(await getPayrollRun(id)); } catch (err) { setError(getErrorMessage(err)); } };
   const create = async (e) => {
     e.preventDefault(); setError(''); setMsg(''); setBusy(true);

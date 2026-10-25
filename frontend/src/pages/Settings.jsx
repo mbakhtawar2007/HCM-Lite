@@ -20,7 +20,7 @@ function Section({ title, section, fields, readOnly }) {
   const [busy, setBusy] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
   const load = () => orgList(section).then((d) => setItems(d.items)).catch((e) => setError(getErrorMessage(e)));
-  useEffect(load, []);
+  useEffect(() => { load(); }, []);
   const submit = async (e) => {
     e.preventDefault(); setError(''); setBusy(true);
     try {
@@ -87,7 +87,7 @@ export default function Settings() {
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
   const loadSetting = () => getSetting().then((d) => setSetting(d.setting)).catch((e) => setError(getErrorMessage(e)));
-  useEffect(loadSetting, []);
+  useEffect(() => { loadSetting(); }, []);
   const save = async (e) => {
     e.preventDefault(); setError(''); setMsg(''); setBusy(true);
     try {

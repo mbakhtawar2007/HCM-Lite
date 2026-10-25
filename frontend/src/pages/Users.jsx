@@ -26,7 +26,7 @@ export default function Users() {
   const [resetUser, setResetUser] = useState(null);
   const [resetPw, setResetPw] = useState('');
   const load = () => { setLoading(true); listUsers().then((d) => setUsers(d.users)).catch((e) => setError(getErrorMessage(e))).finally(() => setLoading(false)); };
-  useEffect(load, []);
+  useEffect(() => { load(); }, []);
   const submit = async (e) => {
     e.preventDefault(); setError(''); setMsg(''); setBusy(true);
     try { await createUser(form); setMsg('Login created with a temporary password.'); setForm({ name: '', email: '', password: '', role: 'HR' }); load(); }
