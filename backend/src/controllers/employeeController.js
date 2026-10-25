@@ -11,6 +11,8 @@ import { PayrollRun } from '../models/PayrollRun.js';
 import { parseCsv } from '../services/csvService.js';
 import { csvEscape } from '../services/csvService.js';
 import { writeAudit } from '../services/attendanceService.js';
+import { computeAttendanceStatus } from '../services/attendanceService.js';
+import { getSetting } from '../services/settingsService.js';
 import { escapeRegExp } from '../utils/escapeRegExp.js';
 import { scopedEmployee } from '../utils/scope.js';
 import mongoose from 'mongoose';
@@ -140,6 +142,7 @@ export const updateEmployee = asyncHandler(async (req, res) => {
 // GET /api/employees/:id/360 — details + attendance + leave + payslip lines.
 export const getEmployee360 = asyncHandler(async (req, res) => {
   const emp = await scopedEmployee(req, req.params.id);
+  const setting = await getSetting();
   const [attendance, leaves, runs] = await Promise.all([
     Attendance.find({ employee: emp._id }).sort({ date: -1 }).limit(100),
     LeaveRequest.find({ employee: emp._id }).sort({ createdAt: -1 }).populate('leaveType'),
@@ -157,7 +160,10 @@ export const getEmployee360 = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
     employee: await populate(Employee.findById(emp._id)),
-    attendance,
+    // Attendance docs carry no status field of their own: compute it
+    // with the shared rule, exactly like /attendance/me and /attendance
+    // do — otherwise the 360 Status column renders blank.
+    attendance: attendance.map((r) => ({ ...r.toJSON(), status: computeAttendanceStatus(r, setting) })),
     leaves,
     payslips,
   });
@@ -166,7 +172,7 @@ export const getEmployee360 = asyncHandler(async (req, res) => {
 // GET /api/employees/export/csv — HR/ADMIN.
 export const exportEmployeesCsv = asyncHandler(async (_req, res) => {
   const employees = await populate(Employee.find().sort({ employeeCode: 1 }));
-  const header = 'employeeCode,name,email,department,designation,joiningDate,basicSalary,phone';
+  const header = 'employeeCode,name,email,department,designation,joiningDate,basicSalary,phone,address';
   const lines = employees.map((e) =>
     [
       e.employeeCode,
@@ -177,6 +183,7 @@ export const exportEmployeesCsv = asyncHandler(async (_req, res) => {
       e.joiningDate?.toISOString().slice(0, 10) || '',
       e.basicSalary,
       e.phone || '',
+      e.address || '',
     ]
       .map(csvEscape)
       .join(','),

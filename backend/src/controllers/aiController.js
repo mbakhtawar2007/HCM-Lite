@@ -37,7 +37,11 @@ async function logAi(req, endpoint, toolsUsed, success, error, startedAt) {
 async function checkRateLimit(req) {
   const limit = aiRateLimitPerHour();
   const since = new Date(Date.now() - 3600 * 1000);
-  const count = await AiLog.countDocuments({ user: req.user._id, createdAt: { $gte: since } });
+  // 503 "AI not configured" responses are logged but never used the
+  // provider, so they must not consume quota: a user who hit 503s while
+  // the key was missing would otherwise be 429'd for an hour once the
+  // key was added. Real attempts (including provider failures) still count.
+  const count = await AiLog.countDocuments({ user: req.user._id, createdAt: { $gte: since }, error: { $ne: 'AI not configured' } });
   if (count >= limit) throw new ApiError(429, `AI limit reached: about ${limit} AI requests per hour. Please try again later.`);
 }
 
