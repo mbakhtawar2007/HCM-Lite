@@ -7,7 +7,7 @@ import { LeaveRequest } from '../models/LeaveRequest.js';
 import { Holiday } from '../models/Holiday.js';
 import { computeAttendanceStatus, todayDayStart, writeAudit } from '../services/attendanceService.js';
 import { getSetting, dayStart, dateKey, isWeekend, isHoliday, haversineMeters } from '../services/settingsService.js';
-import { ownEmployee } from '../utils/scope.js';
+import { ownEmployee, ownEmployeeForSelfService } from '../utils/scope.js';
 import { assertDateQuery, assertObjectIdQuery } from '../utils/queryGuard.js';
 
 // POST /api/attendance/check-in — server-stamped time, one record/day.
@@ -16,7 +16,7 @@ import { assertDateQuery, assertObjectIdQuery } from '../utils/queryGuard.js';
 // be inside the radius. If no office location is set, check-in works
 // exactly as before (no location required, nothing breaks).
 export const checkIn = asyncHandler(async (req, res) => {
-  const emp = await ownEmployee(req.user._id);
+  const emp = await ownEmployeeForSelfService(req.user._id, req.user.role);
   const setting = await getSetting();
   if (setting.officeLat != null && setting.officeLng != null && setting.officeRadiusMeters > 0) {
     const { latitude, longitude } = req.body || {};
@@ -48,7 +48,7 @@ export const checkIn = asyncHandler(async (req, res) => {
 });
 
 export const checkOut = asyncHandler(async (req, res) => {
-  const emp = await ownEmployee(req.user._id);
+  const emp = await ownEmployeeForSelfService(req.user._id, req.user.role);
   const record = await Attendance.findOne({ employee: emp._id, date: todayDayStart() });
   if (!record) throw notFoundError('No check-in found for today');
   if (record.checkOut) throw conflict('Already checked out today');
@@ -60,7 +60,7 @@ export const checkOut = asyncHandler(async (req, res) => {
 });
 
 export const myAttendance = asyncHandler(async (req, res) => {
-  const emp = await ownEmployee(req.user._id);
+  const emp = await ownEmployeeForSelfService(req.user._id, req.user.role);
   const setting = await getSetting();
   const records = await Attendance.find({ employee: emp._id }).sort({ date: -1 }).limit(200);
   res.status(200).json({
@@ -124,7 +124,7 @@ export const dailyBoard = asyncHandler(async (req, res) => {
 });
 
 export const requestCorrection = asyncHandler(async (req, res) => {
-  const emp = await ownEmployee(req.user._id);
+  const emp = await ownEmployeeForSelfService(req.user._id, req.user.role);
   const attendance = await Attendance.findById(req.body.attendanceId);
   if (!attendance || String(attendance.employee) !== String(emp._id))
     throw notFoundError('Attendance record not found');
@@ -177,4 +177,46 @@ export const decideCorrection = asyncHandler(async (req, res) => {
   }
   await writeAudit(req, 'DECIDE', 'AttendanceCorrection', correction._id, before, correction.toJSON());
   res.status(200).json({ success: true, correction });
+});
+
+// POST /api/attendance/check-in/camera — bonus G, optional.
+// The browser must have detected exactly one face (faceCount === 1),
+// must send GPS coordinates, and accuracy must be <= 100m. The server
+// then applies the same office geofence as normal check-in (Haversine
+// vs officeLat/officeLng/radius) and decides — the phone only sends
+// data. No photo is stored; the record only carries source='camera'.
+// Any failure here falls back to the normal web check-in / HR
+// correction path (the caller simply does not get a camera record).
+export const cameraCheckIn = asyncHandler(async (req, res) => {
+  const emp = await ownEmployeeForSelfService(req.user._id, req.user.role);
+  const { latitude, longitude, accuracy, faceCount } = req.body || {};
+  if (faceCount !== 1) throw badRequest('Camera check-in requires exactly one face in the frame');
+  if (accuracy == null || accuracy > 100) throw badRequest('Camera check-in requires GPS accuracy of 100m or better');
+  const setting = await getSetting();
+  if (setting.officeLat == null || setting.officeLng == null || !(setting.officeRadiusMeters > 0)) {
+    throw badRequest('Camera check-in requires an office location and radius in Settings');
+  }
+  const distance = haversineMeters(setting.officeLat, setting.officeLng, latitude, longitude);
+  if (distance > setting.officeRadiusMeters) {
+    throw forbidden(
+      `You are outside the office radius (${Math.round(distance)}m away, limit ${setting.officeRadiusMeters}m)`,
+    );
+  }
+  const today = todayDayStart();
+  if (await Attendance.findOne({ employee: emp._id, date: today })) {
+    throw conflict('Already checked in today');
+  }
+  let record;
+  try {
+    record = await Attendance.create({ employee: emp._id, date: today, checkIn: new Date(), source: 'camera' });
+  } catch (err) {
+    if (err && err.code === 11000) throw conflict('Already checked in today');
+    throw err;
+  }
+  await writeAudit(req, 'CREATE', 'Attendance', record._id, null, {
+    employee: String(emp._id),
+    date: today,
+    source: 'camera',
+  });
+  res.status(201).json({ success: true, attendance: record });
 });

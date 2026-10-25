@@ -12,7 +12,10 @@ const router = express.Router();
 
 const chatSchema = z.object({
   message: z.string().trim().min(1).max(2000),
-  history: z.array(z.object({ role: z.enum(['user', 'assistant']), content: z.string().min(1).max(2000) })).max(10).optional(),
+  history: z
+    .array(z.object({ role: z.enum(['user', 'assistant']), content: z.string().min(1).max(2000) }))
+    .max(10)
+    .optional(),
   language: z.enum(['en', 'ur']).optional(),
 });
 
@@ -21,7 +24,9 @@ const chatSchema = z.object({
 // never a free database query. Nested objects/arrays are rejected.
 const kpiValue = z.union([z.number(), z.string().max(200), z.boolean(), z.null()]);
 const dashboardSchema = z.object({
-  kpi: z.record(kpiValue).refine((k) => Object.keys(k).length > 0 && Object.keys(k).length <= 50, 'kpi must be a non-empty object'),
+  kpi: z
+    .record(kpiValue)
+    .refine((k) => Object.keys(k).length > 0 && Object.keys(k).length <= 50, 'kpi must be a non-empty object'),
 });
 
 const smartLeaveSchema = z.object({

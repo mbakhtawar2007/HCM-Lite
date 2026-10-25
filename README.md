@@ -99,22 +99,30 @@ setup can never be blocked by a stray public account.
   departments, designations, leave types and holidays (Admin writes, HR
   reads). HR registers employees (login + job + salary), directory with
   server search/filter/paging, Employee 360 view, CSV export and CSV
-  import (dry-run validation, then writing valid rows only). Attendance
+  import (dry-run validation, then writing valid rows only). Employees
+  carry an optional gender and probation end date (see the 100%
+  compliance pass). Attendance
   with server-stamped check-in/out (second check-in 409; late after
   09:15, half day under 5 h, absent, missing check-out), daily board
   and correction requests, plus an optional office geofence on check-in
-  (enforced only when office location + radius are set). Leave on
+  (enforced only when office location + radius are set). Staff logins
+  check in and apply for leave only through a linked employee record.
+  Leave on
   working days only (weekends + holidays skipped; overlap or
-  over-balance 422; HR decisions with notifications). Payroll:
+  over-balance 422; HR decisions with notifications; pending and
+  not-yet-started approved leave can be cancelled). Payroll:
   gross = 1.5 × basic (HRA 40%, medical 10%), per-day deductions,
-  joiner/leaver prorating, tax slabs, HR draft → Admin finalize →
+  joiner/leaver prorating, tax slabs, late penalty (3 lates = 0.5 day,
+  shown as its own line), HR draft → Admin finalize →
   locked forever, payslip PDF (own only, finalized only).
 - **P2 — Server-computed dashboards** — `/api/dashboards/admin|hr|employee`
   compute every KPI on the server (MongoDB aggregation + the shared
   attendance service), filterable by date range and department:
   headcount, attrition, payroll cost from finalized runs,
   attendance/late/absenteeism rates, leave utilization, top 5
-  late-comers, tenure, audit feed. Rates with no denominator show
+  late-comers, tenure, audit feed, plus gender breakdown, probation
+  counts, absence anomaly flags, and attrition risk (Admin/HR; see the
+  100% compliance pass for the exact formulas). Rates with no denominator show
   "No data yet", never NaN.
 - **P3 — AI assistant** — see "AI assistant" below: chat with 7 scoped
   tools, dashboard summary from supplied KPI JSON only, smart leave
@@ -176,21 +184,86 @@ setup can never be blocked by a stray public account.
   a single test command (`cd backend && npm test`), backend ESLint
   (clean) + Prettier configs. New suite `backend/test-phase5.mjs`.
 
+### 100% compliance pass (after the audit, before submission)
+
+- **HR/Admin self-service** — a staff login (HR or ADMIN) can now hold
+  a linked employee record: Admin registers an employee with
+  `existingUserId` instead of name/email/password, and that login then
+  checks in/out, views its own attendance, applies for and cancels its
+  own leave, and views its own finalized payslips. Staff with no linked
+  record get a clear 403 telling them to ask an Admin to link a record
+  — never a silent check-in with no record (that would corrupt
+  attendance and payroll). New suite `backend/test-100pct.mjs`.
+- **Approved-leave cancellation** — an employee (or a linked staff
+  user, for their own record) can cancel an APPROVED leave that has not
+  started yet; the balance is restored automatically (balances count
+  APPROVED only), an audit entry is written, and HR/Admin are
+  notified. Cancelling a leave that has started or is in the past stays
+  blocked (409); cancelling someone else's leave stays 403.
+- **Gender + probation** — Employee now has an optional `gender`
+  (Male / Female / Other / Prefer not to say, null = "Not specified")
+  and an explicit `probationEndDate` (null = no probation recorded;
+  "on probation" on a date iff `probationEndDate >=` that date). Both
+  fields work on registration, edit, and CSV import/export round-trip
+  (columns 10–11). Dashboards report the collected values only —
+  employees without a gender are counted as "Not specified", never
+  assigned one. Admin dashboard now returns `genderBreakdown`,
+  `probation`, `absenceAnomalies`, and `attritionRisk`; HR dashboard
+  returns `absenceAnomalies` and `attritionRisk`.
+- **Late penalty (bonus)** — every complete set of 3 late days in a
+  payroll month deducts 0.5 working day: `latePenaltyDays =
+  floor(lateDays / 3) × 0.5`, included in `deductionDays` and also
+  reported separately as `latePenaltyDays` / `latePenaltyAmount` on the
+  payroll line and the payslip PDF. The 1-late hand-calc case (net Rs
+  122,954.55) is unchanged, because 1 late gives a penalty of 0.
+- **Absence anomaly flags (bonus)** — server-computed from real
+  attendance/leave records only: 3+ consecutive absent working days
+  (a present/late/half-day or on-leave day breaks the run), 3+ absent
+  Mondays or Fridays, or an absence rate above 30% with at least 5 due
+  slots. Surfaced as `absenceAnomalies` on Admin and HR dashboards.
+- **Attrition risk score (bonus)** — server-computed per employee
+  from real data only: `score = lateRate × 30 + absenceRate × 30 +
+  leaveUtilisation × 20 + tenurePoints`, where `lateRate =
+  late / (present + late)`, `absenceRate = absent / dueSlots`,
+  `leaveUtilisation = min(1, onLeave / max(1, dueSlots))`,
+  `tenurePoints = 20 if tenure < 1 year, 10 if < 2 years, else 0`.
+  Bands: ≥60 High, ≥35 Medium, else Low; no due slots → score null,
+  band "No data". It is labelled in the UI as an indicator, not a
+  prediction. Surfaced as `attritionRisk` on Admin and HR dashboards.
+- **Camera attendance (bonus, optional)** — the Attendance page offers
+  a camera check-in: front-camera preview, face detection in the
+  browser with `@mediapipe/tasks-vision` (BlazeFace short-range, lazy
+  dynamic import so the main bundle stays small), rejected unless
+  exactly one face is seen. GPS latitude/longitude + accuracy are sent
+  to `POST /api/attendance/check-in/camera`; the server rejects
+  accuracy worse than 100 m (400), a location outside the office
+  radius (403, Haversine, same geofence logic as web check-in), and a
+  second check-in the same day (409), and stores `source: 'camera'`
+  (no photo is stored). A failed camera check falls back to the normal
+  web check-in / HR correction path, which is unchanged. The server
+  checks are test-covered; browser face detection itself cannot be
+  fully tested headlessly (see "What is NOT done").
+- **Code quality closed** — frontend ESLint is now installed
+  (ESLint 9 + `eslint-plugin-react` + `eslint-plugin-react-hooks`;
+  the frontend pins ESLint 9 because the React plugin peers ESLint
+  ^9, while the backend uses ESLint 10) and clean (0 errors; 10
+  pre-existing `exhaustive-deps` warnings about the `load` function
+  remain — including it would re-run effects in a loop). Full-repo
+  Prettier is applied: backend and frontend `format:check` both pass.
+  `npm audit` is still blocked in this environment (see below).
+
 ## What is NOT done (honest limits)
 
-- **Bonus (P6) — not built:** late penalty, absence anomaly flags,
-  attrition risk score, camera attendance. (Roman Urdu AI and dark
-  mode/PWA **are** built — Phase 3 and Phase 4 respectively — and are
-  not in this list. CSV import writing rows **is** built — Phase 1.)
-- **Approved-leave cancellation** — only pending leave can be cancelled
-  via the API; cancelling approved leave would silently change balances
-  and payroll.
+- **Camera browser detection, headlessly untested** — the server side
+  of camera check-in (face count, accuracy, geofence, duplicate,
+  `source: 'camera'`) is test-covered, but the browser face-detection
+  step needs a real camera + browser to verify end to end, which a
+  headless test cannot do. The web check-in path is unchanged and is
+  the fallback for any camera failure.
 - **Announcement editing** — announcements are post/delete only; there
   is no edit endpoint.
 - **Employee payslips before finalization** — employees see payslips
   only for finalized runs, never drafts.
-- **Gender breakdown** — employees have no gender field, so dashboards
-  show "not collected" instead of invented numbers.
 - **Live AI answer verification** — a live AI answer against the
   deployed instance has not been verified end to end with a real key
   and a signed-in account, because creating one would block first-run
@@ -212,14 +285,10 @@ setup can never be blocked by a stray public account.
 - **JWT expiry is 7 days** (`JWT_EXPIRES_IN`, default `7d`) — left
   unchanged by decision; shortening it would narrow the stolen-token
   window but changes session UX.
-- **Frontend ESLint pending** — backend ESLint is clean; frontend has a
-  Prettier config but no React/JSX lint plugin set yet.
-- **Full-repo Prettier reformat pending** — 15 untouched backend files
-  (e.g. `announcementController`, `miscController`, `csvService`,
-  `p1Validation`, several route files) still fail `prettier --check`.
-  Only Phase 5-touched files were formatted, to avoid a giant diff.
-  Run `cd backend && npm run format` (and the frontend equivalent)
-  to apply it.
+- **Frontend ESLint warnings** — frontend ESLint is clean (0 errors)
+  with 10 pre-existing `exhaustive-deps` warnings (see the 100%
+  compliance pass above); they are warnings, not errors, and were left
+  rather than risking effect loops.
 - **Concurrent first-run setup race** — two simultaneous setups with
   different emails could both pass the user-count check. Needs a
   lock/transaction; single-threaded setup is unaffected and the unique
@@ -320,23 +389,24 @@ are CSV export (`text/csv`) and the payslip PDF (`application/pdf`).
 | POST | `/api/users/:id/reset-password` | ADMIN | Set a temporary password (invalidates old tokens) |
 | GET/PATCH | `/api/org/settings` | HR read, ADMIN write | Company settings (office start, grace, weekends, location/radius) |
 | CRUD | `/api/org/departments`, `/designations`, `/leave-types`, `/holidays` | HR read, ADMIN write | Delete blocked with 409 if in use |
-| GET/POST | `/api/employees` | HR/ADMIN | Directory: server search, filters, paging; HR registers (creates login) |
+| GET/POST | `/api/employees` | HR/ADMIN | Directory: server search, filters, paging; HR registers (creates login, or links to an existing login via `existingUserId` for staff self-service); registration/edit/CSV accept optional `gender` and `probationEndDate` |
 | GET | `/api/employees/me`, `/api/employees/:id`, `/api/employees/:id/360` | Scope-checked | Employee edits only own phone/address; 360 = details + attendance + leave + payslips (employees see finalized payslips only) |
-| GET | `/api/employees/export/csv` | HR/ADMIN | CSV export |
+| GET | `/api/employees/export/csv` | HR/ADMIN | CSV export (11 columns incl. `gender`, `probationEndDate`) |
 | POST | `/api/employees/import/dry-run` | HR/ADMIN | Validation only — row + field + reason errors, writes nothing |
 | POST | `/api/employees/import` | HR/ADMIN | Writes valid rows only, reports per-row created/failed, reuses dry-run validation |
-| POST | `/api/attendance/check-in`, `/check-out` | Yes | Server-stamped times; second check-in 409; geofence enforced only when office location + radius are set |
+| POST | `/api/attendance/check-in`, `/check-out` | EMPLOYEE/HR/ADMIN | Server-stamped times; second check-in 409; geofence enforced only when office location + radius are set; staff need a linked employee record (clear 403 otherwise) |
+| POST | `/api/attendance/check-in/camera` | EMPLOYEE/HR/ADMIN | Camera check-in: requires `faceCount === 1`, GPS accuracy ≤ 100 m, inside office radius; stores `source: 'camera'`, no photo |
 | GET | `/api/attendance/me`, `/api/attendance`, `/api/attendance/board` | Scope-checked | Own calendar; staff daily board (incl. on-leave/absent) |
 | POST/PATCH | `/api/attendance/corrections` | Request: employee; decide: HR | Correction requests with reason, HR approves/rejects |
-| GET/POST | `/api/leaves`, `/api/leaves/balances` | Scope-checked | Apply (EMPLOYEE only), balances, history; working days only |
-| PATCH | `/api/leaves/:id/cancel` | EMPLOYEE | Pending leave only |
+| GET/POST | `/api/leaves`, `/api/leaves/balances` | Scope-checked | Apply (EMPLOYEE/HR/ADMIN with a linked record), balances, history; working days only |
+| PATCH | `/api/leaves/:id/cancel` | Own record only | Pending leave, or APPROVED leave that has not started yet (restores balance, audits, notifies HR/Admin); started/past leave 409, other-user 403 |
 | PATCH | `/api/leaves/:id/decision` | HR/ADMIN | Approve/reject with comment; creates employee notification |
-| GET/POST | `/api/payroll/runs` | HR/ADMIN | Create/review drafts |
+| GET/POST | `/api/payroll/runs` | HR/ADMIN | Create/review drafts; lines include `latePenaltyDays` / `latePenaltyAmount` (3 lates = 0.5 day) |
 | POST | `/api/payroll/runs/:id/finalize` | ADMIN only | Finalizes and locks the run forever |
 | POST/DELETE | `/api/payroll/runs/:id/recompute`, `/api/payroll/runs/:id` | HR/ADMIN | Draft only; finalized runs return 409 |
 | GET | `/api/payroll/runs/:id/payslip/:employeeId`, `.../pdf` | Scope-checked | Own only, finalized only (403 otherwise); PDF via PDFKit |
-| GET | `/api/payroll/my-payslips` | EMPLOYEE | Finalized payslips only |
-| GET | `/api/dashboards/admin`, `/hr`, `/employee` | Role + scope | Server-computed KPIs; `?from=&to=&department=` filters |
+| GET | `/api/payroll/my-payslips` | EMPLOYEE/HR/ADMIN | Finalized payslips only (staff via linked record) |
+| GET | `/api/dashboards/admin`, `/hr`, `/employee` | Role + scope | Server-computed KPIs; `?from=&to=&department=` filters; admin adds `genderBreakdown`, `probation`, `absenceAnomalies`, `attritionRisk`; HR adds `absenceAnomalies`, `attritionRisk` |
 | POST | `/api/ai/chat`, `/api/ai/dashboard-summary`, `/api/ai/smart-leave` | Auth + scope | See "AI assistant"; 503 without a key, 429 over ~20/hour; chat accepts `language: 'en' | 'ur'` |
 | GET/POST | `/api/announcements` | Read: all; post: ADMIN/HR | Active announcements, newest first |
 | DELETE | `/api/announcements/:id` | ADMIN only | Audit-logged |
@@ -571,7 +641,7 @@ mocked in `test-p3.mjs`, `test-phase3.mjs` and `test-demo.mjs`).
 
 ```bash
 cd backend
-npm test   # Single command, fail-fast: P1, P2, P3, P4, demo, Phase 1, Phase 2, Phase 3, Phase 5
+npm test   # Single command, fail-fast: P1, P2, P3, P4, demo, Phase 1, Phase 2, Phase 3, Phase 5, 100pct
 # Individual suites, if you want one only:
 node test-p1.mjs    # Core flows: 56 checks
 node test-p2.mjs    # Dashboards/formulas: 44 checks
@@ -582,15 +652,17 @@ node test-phase1.mjs  # Bugs/broken flows: 85 checks
 node test-phase2.mjs  # Security/RBAC: 84 checks
 node test-phase3.mjs  # AI hardening: 40 checks
 node test-phase5.mjs  # Code quality gaps (tax slabs, proration, AI balances): 35 checks
-# Total: 471 checks, all passing at Phase 6.
+node test-100pct.mjs  # 100% compliance: HR self-service, approved-leave cancel, gender/probation, late penalty, anomalies, attrition risk, camera server checks: 44 checks
+# Total: 515 checks, all passing at the 100% compliance pass.
 ```
 
 Lint/format:
 
 ```bash
 cd backend && npm run lint        # ESLint, clean
-cd backend && npm run format:check  # Prettier — 15 untouched files still pending (see "What is NOT done")
-cd frontend && npm run format:check
+cd backend && npm run format:check  # Prettier, clean
+cd frontend && npm run lint        # ESLint, clean (0 errors, 10 pre-existing warnings)
+cd frontend && npm run format:check  # Prettier, clean
 ```
 
 ## Commands

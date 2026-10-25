@@ -3,9 +3,18 @@
 // absent, half_day, missing_checkout, on_leave, pending, approved,
 // rejected, DRAFT, FINALIZED, …). Unknown statuses render as plain text.
 const GLYPHS = {
-  present: '✓', late: '◷', absent: '✕', half_day: '◐', half: '◐',
-  missing_checkout: '◷', on_leave: '○', pending: '…', approved: '✓',
-  rejected: '✕', DRAFT: '✎', FINALIZED: '🔒',
+  present: '✓',
+  late: '◷',
+  absent: '✕',
+  half_day: '◐',
+  half: '◐',
+  missing_checkout: '◷',
+  on_leave: '○',
+  pending: '…',
+  approved: '✓',
+  rejected: '✕',
+  DRAFT: '✎',
+  FINALIZED: '🔒',
 };
 
 export default function Badge({ status, label }) {

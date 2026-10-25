@@ -4,7 +4,9 @@ import { Link } from 'react-router-dom';
 // Page title + breadcrumb. Sets document.title per page (previously
 // every page was just "HCM Lite").
 export default function PageHeader({ title, breadcrumb = [], actions, subtitle }) {
-  useEffect(() => { document.title = `${title} · HCM Lite`; }, [title]);
+  useEffect(() => {
+    document.title = `${title} · HCM Lite`;
+  }, [title]);
   return (
     <div className="page-header">
       <nav className="breadcrumbs" aria-label="Breadcrumb">

@@ -7,11 +7,7 @@ import { forbidden, unauthorized } from '../utils/errors.js';
 // Routes a must-change-password user may still call: the change itself,
 // logout (so they can abandon the session), and /users/me (so the UI
 // can display the forced-change screen). Everything else is 403.
-const MUST_CHANGE_EXEMPT = new Set([
-  '/api/auth/change-password',
-  '/api/auth/logout',
-  '/api/users/me',
-]);
+const MUST_CHANGE_EXEMPT = new Set(['/api/auth/change-password', '/api/auth/logout', '/api/users/me']);
 
 // Protect a route: requires `Authorization: Bearer <token>`.
 // On success, req.user is the logged-in user (password never included).

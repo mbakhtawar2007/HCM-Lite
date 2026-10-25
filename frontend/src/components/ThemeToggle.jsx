@@ -4,7 +4,9 @@ import Button from './ui/Button.jsx';
 
 export default function ThemeToggle() {
   const [theme, setThemeState] = useState(() => getTheme());
-  useEffect(() => { setTheme(theme); }, [theme]);
+  useEffect(() => {
+    setTheme(theme);
+  }, [theme]);
   return (
     <Button
       variant="ghost"

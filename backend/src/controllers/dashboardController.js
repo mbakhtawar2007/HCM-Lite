@@ -34,7 +34,10 @@ export const employeeDashboard = asyncHandler(async (req, res) => {
   }
   // Mongoose 8: Document.populate() returns a promise, so chaining
   // .populate() on it fails — re-fetch with query populates instead.
-  const populated = await Employee.findById(employee._id).populate('department').populate('designation').populate('user', 'name email role');
+  const populated = await Employee.findById(employee._id)
+    .populate('department')
+    .populate('designation')
+    .populate('user', 'name email role');
   const data = await getEmployeeDashboard(populated, req.query);
   res.status(200).json({ success: true, ...data });
 });

@@ -8,9 +8,10 @@
 //
 // Formulas (brief, documented once here and used everywhere below):
 // - Headcount at a date = employees with isActive true, joined on/before
-//   that date, and leavingDate null or AFTER that date. There is no
-//   gender field and no probation/exit-status field on Employee, so no
-//   gender breakdown is computed (see the admin response).
+//   that date, and leavingDate null or AFTER that date. Gender is an
+//   optional Employee field (null = Not specified, never invented);
+//   probation is an explicit probationEndDate (null = no probation
+//   recorded). "On probation" on a date iff probationEndDate >= date.
 // - Attrition = exits in period / average headcount, where average
 //   headcount = (headcount at period start + headcount at period end) / 2.
 //   Null when the average is 0 (no denominator, not 0% insight). All
@@ -165,6 +166,8 @@ export async function analyseAttendance(from, to, departmentId, setting, holiday
   }
 
   const totals = { present: 0, late: 0, halfDay: 0, missingCheckout: 0, absent: 0, onLeave: 0, slots: 0 };
+  const perEmployee = new Map(); // employeeId -> per-employee stats (for anomalies + attrition risk)
+  const absenceDates = new Map(); // employeeId -> [dateKey] of absent working days
   const byDept = new Map(); // deptName -> { department, present, late, halfDay, missingCheckout, absent, onLeave, slots }
   const lateCounts = new Map(); // employeeId -> { employee, lateDays }
   const trend = [];
@@ -189,10 +192,24 @@ export async function analyseAttendance(from, to, departmentId, setting, holiday
       const d = byDept.get(deptName);
       totals.slots += 1;
       d.slots += 1;
+      if (!perEmployee.has(String(emp._id)))
+        perEmployee.set(String(emp._id), {
+          employee: emp,
+          present: 0,
+          late: 0,
+          halfDay: 0,
+          missingCheckout: 0,
+          absent: 0,
+          onLeave: 0,
+          slots: 0,
+        });
+      const pe = perEmployee.get(String(emp._id));
+      pe.slots += 1;
       if (leaveDays.get(String(emp._id))?.has(k)) {
         totals.onLeave += 1;
         d.onLeave += 1;
         dayTotals.onLeave += 1;
+        pe.onLeave += 1;
         continue;
       }
       const rec = recByEmpDay.get(`${emp._id}|${k}`);
@@ -200,6 +217,9 @@ export async function analyseAttendance(from, to, departmentId, setting, holiday
         totals.absent += 1;
         d.absent += 1;
         dayTotals.absent += 1;
+        pe.absent += 1;
+        if (!absenceDates.has(String(emp._id))) absenceDates.set(String(emp._id), []);
+        absenceDates.get(String(emp._id)).push(k);
         continue;
       }
       const status = computeAttendanceStatus(rec, setting);
@@ -207,20 +227,24 @@ export async function analyseAttendance(from, to, departmentId, setting, holiday
         totals.late += 1;
         d.late += 1;
         dayTotals.late += 1;
+        pe.late += 1;
         if (!lateCounts.has(String(emp._id))) lateCounts.set(String(emp._id), { employee: emp, lateDays: 0 });
         lateCounts.get(String(emp._id)).lateDays += 1;
       } else if (status === 'HALF_DAY') {
         totals.halfDay += 1;
         d.halfDay += 1;
         dayTotals.halfDay += 1;
+        pe.halfDay += 1;
       } else if (status === 'MISSING_CHECKOUT') {
         totals.missingCheckout += 1;
         d.missingCheckout += 1;
         dayTotals.missingCheckout += 1;
+        pe.missingCheckout += 1;
       } else {
         totals.present += 1;
         d.present += 1;
         dayTotals.present += 1;
+        pe.present += 1;
       }
     }
     trend.push(dayTotals);
@@ -250,8 +274,25 @@ export async function analyseAttendance(from, to, departmentId, setting, holiday
     .sort((a, b) => b.lateDays - a.lateDays || a.employeeCode.localeCompare(b.employeeCode))
     .slice(0, 5);
 
+  const perEmployeeOut = [...perEmployee.values()].map((s) => ({
+    employeeId: String(s.employee._id),
+    employeeCode: s.employee.employeeCode,
+    name: s.employee.user?.name || '',
+    department: s.employee.department?.name || 'Unassigned',
+    joiningDate: s.employee.joiningDate,
+    present: s.present,
+    late: s.late,
+    halfDay: s.halfDay,
+    missingCheckout: s.missingCheckout,
+    absent: s.absent,
+    onLeave: s.onLeave,
+    slots: s.slots,
+    dueSlots: s.slots - s.onLeave,
+  }));
   return {
     ...totals,
+    perEmployee: perEmployeeOut,
+    absenceDates: [...absenceDates.entries()].map(([employeeId, dates]) => ({ employeeId, dates })),
     workingDays: workingDays.length,
     attendanceRate: rate(totals.present + totals.late + totals.missingCheckout + totals.halfDay * 0.5, dueSlots),
     lateRate: rate(totals.late, totals.present + totals.late),
@@ -259,6 +300,116 @@ export async function analyseAttendance(from, to, departmentId, setting, holiday
     trend,
     topLateComers,
   };
+}
+
+// Bonus E — absence anomaly flags. Documented thresholds, real records only:
+//  (1) 3+ consecutive working-day absences (a present/late/half-day
+//      or on-leave day breaks the run);
+//  (2) 3+ absences falling on a Monday or Friday in the range;
+//  (3) absence rate > 30% with at least 5 due slots in the range.
+// Returns one flag per (employee, type); no flag is invented for an
+// employee with no absences.
+export function computeAnomalies(attendance) {
+  const flags = [];
+  const datesByEmp = new Map(attendance.absenceDates.map((d) => [d.employeeId, new Set(d.dates)]));
+  const workingDays = (attendance.trend || []).map((d) => d.date);
+  for (const s of attendance.perEmployee) {
+    if (s.absent === 0) continue;
+    const absentSet = datesByEmp.get(s.employeeId) || new Set();
+    // Consecutive run over working days in order: a present, late,
+    // half-day or on-leave day breaks the run (on-leave days are not
+    // in absentSet, so they break it here too).
+    let run = 0;
+    let maxRun = 0;
+    for (const d of workingDays) {
+      run = absentSet.has(d) ? run + 1 : 0;
+      maxRun = Math.max(maxRun, run);
+    }
+    if (maxRun >= 3)
+      flags.push({
+        employeeId: s.employeeId,
+        employeeCode: s.employeeCode,
+        name: s.name,
+        department: s.department,
+        type: 'CONSECUTIVE_ABSENCES',
+        detail: `${maxRun} consecutive absent working days`,
+        count: maxRun,
+      });
+    const monFri = [...absentSet].filter((d) => {
+      const wd = new Date(`${d}T00:00:00.000Z`).getUTCDay();
+      return wd === 1 || wd === 5;
+    }).length;
+    if (monFri >= 3)
+      flags.push({
+        employeeId: s.employeeId,
+        employeeCode: s.employeeCode,
+        name: s.name,
+        department: s.department,
+        type: 'MONDAY_FRIDAY_PATTERN',
+        detail: `${monFri} absences on Mondays/Fridays`,
+        count: monFri,
+      });
+    const absenceRate = s.dueSlots > 0 ? s.absent / s.dueSlots : 0;
+    if (s.dueSlots >= 5 && absenceRate > 0.3)
+      flags.push({
+        employeeId: s.employeeId,
+        employeeCode: s.employeeCode,
+        name: s.name,
+        department: s.department,
+        type: 'HIGH_ABSENCE_RATE',
+        detail: `${s.absent} absent of ${s.dueSlots} due days (${Math.round(absenceRate * 100)}%)`,
+        count: s.absent,
+        absenceRate: round2(absenceRate),
+      });
+  }
+  return flags;
+}
+
+// Bonus F — attrition risk indicator (NOT a prediction). Formula, all
+// inputs from real records in the range:
+//   score = lateRate*30 + absenceRate*30 + leaveUtilisation*20 + tenurePoints
+//   lateRate = late / (present + late), absenceRate = absent / dueSlots,
+//   leaveUtilisation = min(1, onLeave / max(1, dueSlots)),
+//   tenurePoints = 20 if tenure < 1 year, 10 if < 2 years, else 0.
+// Bands: >= 60 High, >= 35 Medium, else Low. Employees with no due
+// slots get score null and band 'No data' (never a dressed-up 0).
+// On an empty DB the list is [].
+export function computeAttritionRisk(attendance, to) {
+  return attendance.perEmployee
+    .map((s) => {
+      if (!s.dueSlots)
+        return {
+          employeeId: s.employeeId,
+          employeeCode: s.employeeCode,
+          name: s.name,
+          department: s.department,
+          score: null,
+          band: 'No data',
+          lateRate: null,
+          absenceRate: null,
+          leaveUtilisation: null,
+          tenureYears: null,
+        };
+      const lateRate = s.present + s.late > 0 ? s.late / (s.present + s.late) : 0;
+      const absenceRate = s.absent / s.dueSlots;
+      const leaveUtilisation = Math.min(1, s.onLeave / Math.max(1, s.dueSlots));
+      const tenureYears = s.joiningDate ? (to - dayStart(s.joiningDate)) / (365.25 * 86400000) : null;
+      const tenurePoints = tenureYears == null ? 0 : tenureYears < 1 ? 20 : tenureYears < 2 ? 10 : 0;
+      const score = Math.round(lateRate * 30 + absenceRate * 30 + leaveUtilisation * 20 + tenurePoints);
+      return {
+        employeeId: s.employeeId,
+        employeeCode: s.employeeCode,
+        name: s.name,
+        department: s.department,
+        score,
+        band: score >= 60 ? 'High' : score >= 35 ? 'Medium' : 'Low',
+        lateRate: round2(lateRate),
+        absenceRate: round2(absenceRate),
+        leaveUtilisation: round2(leaveUtilisation),
+        tenureYears: tenureYears == null ? null : round2(tenureYears),
+      };
+    })
+    .sort((a, b) => (b.score ?? -1) - (a.score ?? -1) || a.employeeCode.localeCompare(b.employeeCode));
 }
 
 // Leave in range: approved working days overlapping [from, to], grouped
@@ -437,6 +588,32 @@ function tenureBuckets(employees, end) {
   return buckets;
 }
 
+// Gender breakdown (C): counts by collected gender value, plus
+// "Not specified" for null. No value is ever invented.
+export async function genderBreakdown(date, departmentId) {
+  const rows = await Employee.aggregate([
+    { $match: activeMatch(date, departmentId) },
+    { $group: { _id: { $ifNull: ['$gender', 'Not specified'] }, count: { $sum: 1 } } },
+    { $sort: { count: -1 } },
+  ]);
+  const byGender = {};
+  let total = 0;
+  for (const r of rows) {
+    byGender[r._id] = r.count;
+    total += r.count;
+  }
+  return { available: true, total, byGender };
+}
+
+// Probation summary (C): on probation on `date` iff probationEndDate
+// is set and >= date. Employees with no probationEndDate are not counted.
+export async function probationSummary(date, departmentId) {
+  const match = activeMatch(date, departmentId);
+  const onProbation = await Employee.countDocuments({ ...match, probationEndDate: { $gte: date } });
+  const total = await Employee.countDocuments(match);
+  return { onProbation, total, probationEndDateField: 'probationEndDate' };
+}
+
 export async function getAdminDashboard(query) {
   const { from, to } = parseRange(query);
   const dept = await resolveDepartment(query.department);
@@ -458,6 +635,11 @@ export async function getAdminDashboard(query) {
   const headcountYearStart = await headcountAt(yearStart, departmentId);
   const avgHeadcount = (headcountYearStart + headcountEnd) / 2;
   const payroll = await analysePayroll(from, to, departmentId);
+  // Bonus E/F + C: attendance analysis for the same range drives
+  // anomalies and attrition risk (real records only, empty DB -> []).
+  const adminSetting = await getSetting();
+  const adminHolidays = await Holiday.find();
+  const adminAttendance = await analyseAttendance(from, to, departmentId, adminSetting, adminHolidays);
   const activeAtEnd = await Employee.find(activeMatch(to, departmentId))
     .populate('department', 'name')
     .populate('designation', 'name');
@@ -487,9 +669,12 @@ export async function getAdminDashboard(query) {
       .limit(10)
       .populate('postedBy', 'name email role'),
     announcementsAvailable: true,
-    // Employee has no gender field: a gender breakdown would be invented
-    // data, so it is honestly reported as not collected.
-    genderBreakdown: { available: false, reason: 'Employee records do not collect gender.' },
+    // Gender breakdown counts only collected values; employees with
+    // no gender are "Not specified" — never assigned a value.
+    genderBreakdown: await genderBreakdown(to, departmentId),
+    probation: await probationSummary(to, departmentId),
+    absenceAnomalies: computeAnomalies(adminAttendance),
+    attritionRisk: computeAttritionRisk(adminAttendance, to),
     auditFeed,
     aiSummary: { available: false, status: 'coming-soon', summary: null },
   };
@@ -573,6 +758,8 @@ export async function getHrDashboard(query) {
     leaveByType: leave.byType,
     leaveByDepartment: leave.byDepartment,
     topLateComers: attendance.topLateComers,
+    absenceAnomalies: computeAnomalies(attendance),
+    attritionRisk: computeAttritionRisk(attendance, to),
     announcements: await Announcement.find({ isActive: true })
       .sort({ createdAt: -1 })
       .limit(10)

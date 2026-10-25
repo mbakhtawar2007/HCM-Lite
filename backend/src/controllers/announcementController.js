@@ -19,7 +19,8 @@ export const createAnnouncement = asyncHandler(async (req, res) => {
     isActive: true,
   });
   await writeAudit(req, 'CREATE', 'Announcement', announcement._id, null, {
-    title: announcement.title, body: announcement.body,
+    title: announcement.title,
+    body: announcement.body,
   });
   res.status(201).json({ success: true, announcement });
 });

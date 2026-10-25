@@ -19,22 +19,51 @@ import mongoose from 'mongoose';
 
 const populate = (q) => q.populate('department').populate('designation').populate('user', 'name email role isActive');
 
-// POST /api/employees — HR/ADMIN. Creates the login + employee record.
+// POST /api/employees — HR/ADMIN. Creates the login + employee record,
+// or (100%-pass A) links the record to an EXISTING login via
+// existingUserId. Linking is how a staff user (ADMIN/HR) gets
+// self-service: that login keeps its role and password, gains an
+// employee record, and can then check in / apply for leave through
+// its own record. A linked user must have no employee record yet;
+// a record is never created without a real user behind it.
 export const createEmployee = asyncHandler(async (req, res) => {
-  const { name, email, password, employeeCode, department, designation, phone, address, joiningDate, basicSalary } =
-    req.body;
-  if (!(await Department.findById(department))) throw badRequest('Department not found');
-  if (designation && !(await Designation.findById(designation))) throw badRequest('Designation not found');
-  if (await User.findOne({ email })) throw conflict('An account with this email already exists');
-  if (await Employee.findOne({ employeeCode: employeeCode.toUpperCase() }))
-    throw conflict('An employee with this code already exists');
-  const user = await User.create({
+  const {
+    existingUserId,
     name,
     email,
-    password: password || crypto.randomBytes(12).toString('base64').slice(0, 16),
-    role: 'EMPLOYEE',
-    mustChangePassword: true,
-  });
+    password,
+    employeeCode,
+    department,
+    designation,
+    phone,
+    address,
+    joiningDate,
+    basicSalary,
+    gender,
+    probationEndDate,
+  } = req.body;
+  if (!(await Department.findById(department))) throw badRequest('Department not found');
+  if (designation && !(await Designation.findById(designation))) throw badRequest('Designation not found');
+  if (await Employee.findOne({ employeeCode: employeeCode.toUpperCase() }))
+    throw conflict('An employee with this code already exists');
+  let user;
+  let createdLogin = null;
+  if (existingUserId) {
+    user = await User.findById(existingUserId);
+    if (!user) throw badRequest('Existing login not found');
+    if (!user.isActive) throw badRequest('Existing login is deactivated');
+    if (await Employee.findOne({ user: user._id })) throw conflict('That login already has an employee record');
+  } else {
+    if (await User.findOne({ email })) throw conflict('An account with this email already exists');
+    user = await User.create({
+      name,
+      email,
+      password: password || crypto.randomBytes(12).toString('base64').slice(0, 16),
+      role: 'EMPLOYEE',
+      mustChangePassword: true,
+    });
+    createdLogin = user;
+  }
   try {
     const employee = await Employee.create({
       user: user._id,
@@ -45,11 +74,17 @@ export const createEmployee = asyncHandler(async (req, res) => {
       address,
       joiningDate,
       basicSalary,
+      gender: gender ?? null,
+      probationEndDate: probationEndDate || null,
     });
-    await writeAudit(req, 'CREATE', 'Employee', employee._id, null, { employeeCode, email });
+    await writeAudit(req, 'CREATE', 'Employee', employee._id, null, {
+      employeeCode,
+      email: user.email,
+      linkedExistingUser: Boolean(existingUserId),
+    });
     res.status(201).json({ success: true, employee: await populate(Employee.findById(employee._id)) });
   } catch (e) {
-    await User.deleteOne({ _id: user._id });
+    if (createdLogin) await User.deleteOne({ _id: createdLogin._id });
     throw e;
   }
 });
@@ -172,7 +207,8 @@ export const getEmployee360 = asyncHandler(async (req, res) => {
 // GET /api/employees/export/csv — HR/ADMIN.
 export const exportEmployeesCsv = asyncHandler(async (_req, res) => {
   const employees = await populate(Employee.find().sort({ employeeCode: 1 }));
-  const header = 'employeeCode,name,email,department,designation,joiningDate,basicSalary,phone,address';
+  const header =
+    'employeeCode,name,email,department,designation,joiningDate,basicSalary,phone,address,gender,probationEndDate';
   const lines = employees.map((e) =>
     [
       e.employeeCode,
@@ -184,6 +220,8 @@ export const exportEmployeesCsv = asyncHandler(async (_req, res) => {
       e.basicSalary,
       e.phone || '',
       e.address || '',
+      e.gender || '',
+      e.probationEndDate ? e.probationEndDate.toISOString().slice(0, 10) : '',
     ]
       .map(csvEscape)
       .join(','),
@@ -248,6 +286,8 @@ async function validateImportRows(csvText) {
         designation: obj.designation ? desigByName.get(obj.designation.toLowerCase())._id : null,
         phone: obj.phone || undefined,
         address: obj.address || undefined,
+        gender: ['Male', 'Female', 'Other', 'Prefer not to say'].includes(obj.gender) ? obj.gender : null,
+        probationEndDate: obj.probationenddate || null,
         joiningDate: obj.joiningdate,
         basicSalary: Number(obj.basicsalary),
       });
@@ -287,6 +327,8 @@ export const importEmployees = asyncHandler(async (req, res) => {
           designation: row.designation,
           phone: row.phone,
           address: row.address,
+          gender: row.gender ?? null,
+          probationEndDate: row.probationEndDate || null,
           joiningDate: row.joiningDate,
           basicSalary: row.basicSalary,
         });

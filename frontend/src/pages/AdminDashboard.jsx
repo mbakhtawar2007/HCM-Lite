@@ -25,23 +25,46 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const load = async () => {
-    setLoading(true); setError('');
+    setLoading(true);
+    setError('');
     try {
       const params = { from: filters.from, to: filters.to };
       if (filters.department) params.department = filters.department;
       setData(await getAdminDashboard(params));
-    } catch (e) { setError(getErrorMessage(e)); }
+    } catch (e) {
+      setError(getErrorMessage(e));
+    }
     setLoading(false);
   };
-  useEffect(() => { orgList('departments').then((d) => setDepartments(d.items)).catch(() => {}); }, []);
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    orgList('departments')
+      .then((d) => setDepartments(d.items))
+      .catch(() => {});
+  }, []);
+  useEffect(() => {
+    load();
+  }, []);
   return (
     <>
       <PageHeader title="Admin dashboard" subtitle={`Signed in as ${user?.email} · Role: ADMIN`} />
-      <DashboardFilters filters={filters} setFilters={setFilters} departments={departments} onApply={load} loading={loading} />
+      <DashboardFilters
+        filters={filters}
+        setFilters={setFilters}
+        departments={departments}
+        onApply={load}
+        loading={loading}
+      />
       {error && <ErrorState message={error} onRetry={load} />}
       {loading && <PageSkeleton />}
-      {!loading && !data && !error && <EmptyState icon="▦" title="No dashboard data yet" text="Once employees and payroll exist, this dashboard fills in from the server." actionLabel="Register an employee" actionTo="/employees" />}
+      {!loading && !data && !error && (
+        <EmptyState
+          icon="▦"
+          title="No dashboard data yet"
+          text="Once employees and payroll exist, this dashboard fills in from the server."
+          actionLabel="Register an employee"
+          actionTo="/employees"
+        />
+      )}
       {data && (
         <>
           <div className="kpi-grid">
@@ -54,50 +77,209 @@ export default function AdminDashboard() {
           </div>
           <Card title="Payroll (finalized runs only)">
             <ul className="item-list">
-              <li><span>Gross payable</span><span>Rs {data.grossPayable}</span></li>
-              <li><span>Average basic salary</span><span>{data.averageSalary === null ? 'No data yet' : `Rs ${data.averageSalary}`}</span></li>
+              <li>
+                <span>Gross payable</span>
+                <span>Rs {data.grossPayable}</span>
+              </li>
+              <li>
+                <span>Average basic salary</span>
+                <span>{data.averageSalary === null ? 'No data yet' : `Rs ${data.averageSalary}`}</span>
+              </li>
             </ul>
           </Card>
           <Card title="Headcount by department">
-            <HBarChart data={data.headcountByDepartment} label={(r) => r.name} value={(r) => r.count} format={(v) => `${v} people`} />
+            <HBarChart
+              data={data.headcountByDepartment}
+              label={(r) => r.name}
+              value={(r) => r.count}
+              format={(v) => `${v} people`}
+            />
             {data.headcountByDepartment.length > 0 && (
-              <ul className="item-list">{data.headcountByDepartment.map((r) => <li key={r.name}><span>{r.name}</span><span>{r.count} · avg Rs {r.averageBasicSalary}</span></li>)}</ul>
+              <ul className="item-list">
+                {data.headcountByDepartment.map((r) => (
+                  <li key={r.name}>
+                    <span>{r.name}</span>
+                    <span>
+                      {r.count} · avg Rs {r.averageBasicSalary}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             )}
           </Card>
           <Card title="Payroll cost by department (net pay)">
-            <HBarChart data={data.payrollCostByDepartment} label={(r) => r.department} value={(r) => r.payrollCost} format={(v) => `Rs ${v}`} />
+            <HBarChart
+              data={data.payrollCostByDepartment}
+              label={(r) => r.department}
+              value={(r) => r.payrollCost}
+              format={(v) => `Rs ${v}`}
+            />
             {data.payrollCostByDepartment.length > 0 && (
-              <ul className="item-list">{data.payrollCostByDepartment.map((r) => <li key={r.department}><span>{r.department}</span><span>Rs {r.payrollCost} · {r.employees} payslips</span></li>)}</ul>
+              <ul className="item-list">
+                {data.payrollCostByDepartment.map((r) => (
+                  <li key={r.department}>
+                    <span>{r.department}</span>
+                    <span>
+                      Rs {r.payrollCost} · {r.employees} payslips
+                    </span>
+                  </li>
+                ))}
+              </ul>
             )}
           </Card>
           <Card title="Headcount by designation">
-            {data.headcountByDesignation.length === 0 ? <p className="muted">No data yet.</p> : (
-              <ul className="item-list">{data.headcountByDesignation.map((r) => <li key={r.name}><span>{r.name}</span><span>{r.count}</span></li>)}</ul>
+            {data.headcountByDesignation.length === 0 ? (
+              <p className="muted">No data yet.</p>
+            ) : (
+              <ul className="item-list">
+                {data.headcountByDesignation.map((r) => (
+                  <li key={r.name}>
+                    <span>{r.name}</span>
+                    <span>{r.count}</span>
+                  </li>
+                ))}
+              </ul>
             )}
           </Card>
           <Card title="Payroll cost by designation (net pay)">
-            {data.payrollCostByDesignation.length === 0 ? <p className="muted">No finalized payroll in this range yet.</p> : (
-              <ul className="item-list">{data.payrollCostByDesignation.map((r) => <li key={r.designation}><span>{r.designation}</span><span>Rs {r.payrollCost} · {r.employees} payslips</span></li>)}</ul>
+            {data.payrollCostByDesignation.length === 0 ? (
+              <p className="muted">No finalized payroll in this range yet.</p>
+            ) : (
+              <ul className="item-list">
+                {data.payrollCostByDesignation.map((r) => (
+                  <li key={r.designation}>
+                    <span>{r.designation}</span>
+                    <span>
+                      Rs {r.payrollCost} · {r.employees} payslips
+                    </span>
+                  </li>
+                ))}
+              </ul>
             )}
           </Card>
           <Card title="Tenure (from joining date)">
-            <HBarChart data={data.tenureDistribution} label={(r) => r.bucket} value={(r) => r.count} format={(v) => `${v} people`} />
+            <HBarChart
+              data={data.tenureDistribution}
+              label={(r) => r.bucket}
+              value={(r) => r.count}
+              format={(v) => `${v} people`}
+            />
           </Card>
-          <Card title="Gender breakdown">
-            <p className="muted">Not collected — employee records do not include a gender field, so no breakdown is shown. This is not missing data; it was never asked for.</p>
+          <Card title="Gender breakdown (collected values only)">
+            {data.genderBreakdown?.available ? (
+              <ul className="item-list">
+                {Object.entries(data.genderBreakdown.byGender).map(([g, n]) => (
+                  <li key={g}>
+                    <span>{g}</span>
+                    <span>{n}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="muted">Not collected yet.</p>
+            )}
+            <p className="muted">
+              Employees without a gender are counted as &quot;Not specified&quot; — no value is ever assigned for them.
+            </p>
+          </Card>
+          <Card title="Probation">
+            <p className="muted">
+              On probation (probation end date on or after {data.filters.to}):{' '}
+              <strong>{data.probation?.onProbation ?? 0}</strong> of {data.probation?.total ?? 0} active employees.
+            </p>
+          </Card>
+          <Card title="Absence anomalies (real records only)">
+            {(data.absenceAnomalies || []).length === 0 ? (
+              <p className="muted">No anomaly flags in this range.</p>
+            ) : (
+              <ul className="item-list">
+                {data.absenceAnomalies.map((a, i) => (
+                  <li key={i}>
+                    <span>
+                      {a.name} ({a.employeeCode}) — {a.type}
+                    </span>
+                    <span>{a.detail}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="muted">
+              Thresholds: 3+ consecutive absent working days; 3+ Monday/Friday absences; absence rate over 30% with at
+              least 5 due days.
+            </p>
+          </Card>
+          <Card title="Attrition risk — indicator, not a prediction">
+            {(data.attritionRisk || []).length === 0 ? (
+              <p className="muted">No employees in this range.</p>
+            ) : (
+              <ul className="item-list">
+                {data.attritionRisk.map((r) => (
+                  <li key={r.employeeId}>
+                    <span>
+                      {r.name} ({r.employeeCode}) — {r.band}
+                    </span>
+                    <span>{r.score === null ? 'No data' : `Score ${r.score}`}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="muted">
+              Score = late rate × 30 + absence rate × 30 + leave use × 20 + tenure points (20 if under 1 year, 10 if
+              under 2 years). Bands: 60+ High, 35+ Medium, otherwise Low.
+            </p>
           </Card>
           <Card title="Announcements">
-            {data.announcements?.length === 0 ? <p className="muted">No announcements yet.</p> : (
-              <ul className="item-list">{(data.announcements || []).map((a) => <li key={a._id}><span><strong>{a.title}</strong> · {a.body}</span><span>{a.postedBy?.name || ''}</span></li>)}</ul>
+            {data.announcements?.length === 0 ? (
+              <p className="muted">No announcements yet.</p>
+            ) : (
+              <ul className="item-list">
+                {(data.announcements || []).map((a) => (
+                  <li key={a._id}>
+                    <span>
+                      <strong>{a.title}</strong> · {a.body}
+                    </span>
+                    <span>{a.postedBy?.name || ''}</span>
+                  </li>
+                ))}
+              </ul>
             )}
-            <p><a href="/announcements">All announcements</a></p>
+            <p>
+              <a href="/announcements">All announcements</a>
+            </p>
           </Card>
-          <DashboardAiSummary kpi={{ headcount: data.headcount, headcountAtPeriodStart: data.headcountAtPeriodStart, exitsYtd: data.exitsYtd, attritionYtd: data.attritionYtd, payrollCost: data.payrollCost, grossPayable: data.grossPayable, finalizedRunsInRange: data.finalizedRunsInRange, averageSalary: data.averageSalary, from: data.filters.from, to: data.filters.to }} />
+          <DashboardAiSummary
+            kpi={{
+              headcount: data.headcount,
+              headcountAtPeriodStart: data.headcountAtPeriodStart,
+              exitsYtd: data.exitsYtd,
+              attritionYtd: data.attritionYtd,
+              payrollCost: data.payrollCost,
+              grossPayable: data.grossPayable,
+              finalizedRunsInRange: data.finalizedRunsInRange,
+              averageSalary: data.averageSalary,
+              from: data.filters.from,
+              to: data.filters.to,
+            }}
+          />
           <Card title="Recent audit feed">
-            {data.auditFeed.length === 0 ? <p className="muted">No audit entries yet.</p> : (
-              <ul className="item-list">{data.auditFeed.map((l) => <li key={l._id}><span>{l.action} {l.entity} · {l.actor?.name || 'System'}</span><span>{l.createdAt.slice(0, 10)}</span></li>)}</ul>
+            {data.auditFeed.length === 0 ? (
+              <p className="muted">No audit entries yet.</p>
+            ) : (
+              <ul className="item-list">
+                {data.auditFeed.map((l) => (
+                  <li key={l._id}>
+                    <span>
+                      {l.action} {l.entity} · {l.actor?.name || 'System'}
+                    </span>
+                    <span>{l.createdAt.slice(0, 10)}</span>
+                  </li>
+                ))}
+              </ul>
             )}
-            <p><a href="/audit">Full audit log</a> · <a href="/payroll">Payroll</a> · <a href="/users">Users</a> · <a href="/settings">Settings</a></p>
+            <p>
+              <a href="/audit">Full audit log</a> · <a href="/payroll">Payroll</a> · <a href="/users">Users</a> ·{' '}
+              <a href="/settings">Settings</a>
+            </p>
           </Card>
         </>
       )}

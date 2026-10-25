@@ -5,9 +5,18 @@ import Card from '../components/ui/Card.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 
 const features = [
-  { title: 'Three roles', text: 'Admin, HR and Employee, each with its own menu, data scope and dashboard. Roles are enforced on the server.' },
-  { title: 'First-run setup', text: 'The app starts empty. Set up the company and the first Admin account, then build everything from real data — no dummy data.' },
-  { title: 'Core HR, then AI', text: 'Employees, attendance, leave and payroll, server dashboards, and the AI assistant on the same scoped data — all live.' },
+  {
+    title: 'Three roles',
+    text: 'Admin, HR and Employee, each with its own menu, data scope and dashboard. Roles are enforced on the server.',
+  },
+  {
+    title: 'First-run setup',
+    text: 'The app starts empty. Set up the company and the first Admin account, then build everything from real data — no dummy data.',
+  },
+  {
+    title: 'Core HR, then AI',
+    text: 'Employees, attendance, leave and payroll, server dashboards, and the AI assistant on the same scoped data — all live.',
+  },
 ];
 
 export default function Home() {
@@ -26,9 +35,8 @@ export default function Home() {
       <section className="hero">
         <h1>HCM Lite</h1>
         <p>
-          AI-assisted Human Capital Management for Admin, HR and Employees.
-          Built for the Saylani Hackathon: the system starts empty, and every
-          number comes from what people do in the app.
+          AI-assisted Human Capital Management for Admin, HR and Employees. Built for the Saylani Hackathon: the system
+          starts empty, and every number comes from what people do in the app.
         </p>
         {user ? (
           <Link className="btn btn-primary" to="/dashboard">
@@ -65,10 +73,9 @@ export default function Home() {
 
       <Card title="What is live">
         <p>
-          First-run setup, role-based auth, organisation setup, employees,
-          attendance, leave, payroll, server dashboards, the AI assistant,
-          audit, announcements and notifications. See the README for the
-          full done / not-done list.
+          First-run setup, role-based auth, organisation setup, employees, attendance, leave, payroll, server
+          dashboards, the AI assistant, audit, announcements and notifications. See the README for the full done /
+          not-done list.
         </p>
       </Card>
     </>

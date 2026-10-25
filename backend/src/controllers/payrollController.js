@@ -15,7 +15,8 @@ const lockCheck = (run) => {
 
 export const createRun = asyncHandler(async (req, res) => {
   const [year, month] = req.body.month.split('-').map(Number);
-  if (await PayrollRun.findOne({ month: req.body.month })) throw conflict('A payroll run already exists for this month');
+  if (await PayrollRun.findOne({ month: req.body.month }))
+    throw conflict('A payroll run already exists for this month');
   const setting = await getSetting();
   const holidays = await Holiday.find();
   const employees = await Employee.find({ isActive: true }).sort({ employeeCode: 1 });
@@ -76,8 +77,14 @@ export const finalizeRun = asyncHandler(async (req, res) => {
   await writeAudit(req, 'FINALIZE', 'PayrollRun', run._id, before, run.toJSON());
   for (const line of run.lines) {
     const emp = await Employee.findById(line.employee);
-    if (emp) await notifyUser(emp.user, 'PAYSLIP_AVAILABLE', 'Payslip available',
-      `Your payslip for ${run.month} is available. Net pay: Rs ${line.netPay}.`, run._id);
+    if (emp)
+      await notifyUser(
+        emp.user,
+        'PAYSLIP_AVAILABLE',
+        'Payslip available',
+        `Your payslip for ${run.month} is available. Net pay: Rs ${line.netPay}.`,
+        run._id,
+      );
   }
   res.status(200).json({ success: true, run });
 });
@@ -122,8 +129,14 @@ export const getPayslipPdf = asyncHandler(async (req, res) => {
   doc.moveDown();
   doc.fontSize(12).text(`Employee: ${employee.user?.name || ''} (${employee.employeeCode})`);
   doc.text(`Basic salary: Rs ${line.basicSalary}`);
-  doc.text(`Gross salary (1.5 x basic): Rs ${line.grossSalary}  (HRA 40%: Rs ${line.hra}, Medical 10%: Rs ${line.medical})`);
-  doc.text(`Working days: ${line.workingDays} · Effective: ${line.effectiveWorkingDays} · Present: ${line.presentDays} · Late: ${line.lateDays} · Half days: ${line.halfDays} · Absent: ${line.absentDays} · Unpaid leave: ${line.unpaidLeaveDays} · Paid leave: ${line.paidLeaveDays}`);
+  doc.text(
+    `Gross salary (1.5 x basic): Rs ${line.grossSalary}  (HRA 40%: Rs ${line.hra}, Medical 10%: Rs ${line.medical})`,
+  );
+  doc.text(
+    `Working days: ${line.workingDays} · Effective: ${line.effectiveWorkingDays} · Present: ${line.presentDays} · Late: ${line.lateDays} · Half days: ${line.halfDays} · Absent: ${line.absentDays} · Unpaid leave: ${line.unpaidLeaveDays} · Paid leave: ${line.paidLeaveDays}`,
+  );
+  if (line.latePenaltyDays)
+    doc.text(`Late penalty: ${line.latePenaltyDays} day(s) (3 lates = 0.5 day) — Rs ${line.latePenaltyAmount || 0}`);
   doc.text(`Gross payable: Rs ${line.grossPayable}`);
   doc.text(`Tax: Rs ${line.tax}`);
   doc.fontSize(14).text(`Net pay: Rs ${line.netPay}`);
@@ -133,6 +146,10 @@ export const getPayslipPdf = asyncHandler(async (req, res) => {
 export const myPayslips = asyncHandler(async (req, res) => {
   const own = await ownEmployee(req.user._id);
   const runs = await PayrollRun.find({ status: 'FINALIZED', 'lines.employee': own._id }).sort({ month: -1 });
-  const payslips = runs.flatMap((r) => r.lines.filter((l) => String(l.employee) === String(own._id)).map((l) => ({ month: r.month, status: r.status, runId: r._id, ...l.toObject() })));
+  const payslips = runs.flatMap((r) =>
+    r.lines
+      .filter((l) => String(l.employee) === String(own._id))
+      .map((l) => ({ month: r.month, status: r.status, runId: r._id, ...l.toObject() })),
+  );
   res.status(200).json({ success: true, count: payslips.length, payslips });
 });

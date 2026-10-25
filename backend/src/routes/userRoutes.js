@@ -1,5 +1,12 @@
 import express from 'express';
-import { createUser, getMe, getUserById, getUsers, resetUserPassword, updateUser } from '../controllers/userController.js';
+import {
+  createUser,
+  getMe,
+  getUserById,
+  getUsers,
+  resetUserPassword,
+  updateUser,
+} from '../controllers/userController.js';
 import { protect } from '../middleware/auth.js';
 import { requireRole } from '../middleware/requireRole.js';
 import { validate } from '../middleware/validate.js';

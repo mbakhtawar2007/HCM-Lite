@@ -15,7 +15,9 @@ export default function DashboardAiSummary({ kpi }) {
   const [unavailable, setUnavailable] = useState(false);
 
   const summarize = async () => {
-    setLoading(true); setError(''); setUnavailable(false);
+    setLoading(true);
+    setError('');
+    setUnavailable(false);
     try {
       const d = await aiDashboardSummary(kpi);
       if (d.aiAvailable === false) setUnavailable(true);
@@ -33,16 +35,27 @@ export default function DashboardAiSummary({ kpi }) {
       {bullets === null && !unavailable && !error && (
         <p className="muted">Summarize the KPIs above in 3–5 insight bullets, using only those numbers.</p>
       )}
-      {unavailable && <p className="muted">AI summary is unavailable — the AI key has not been added yet, or the AI service is unreachable. The KPIs above are still the real numbers.</p>}
+      {unavailable && (
+        <p className="muted">
+          AI summary is unavailable — the AI key has not been added yet, or the AI service is unreachable. The KPIs
+          above are still the real numbers.
+        </p>
+      )}
       {error && <p className="alert alert-error">{error}</p>}
       {bullets && bullets.length > 0 && (
         <>
-          <ul>{bullets.map((b, i) => <li key={i}>{b}</li>)}</ul>
+          <ul>
+            {bullets.map((b, i) => (
+              <li key={i}>{b}</li>
+            ))}
+          </ul>
           <p className="muted">AI-generated — bullets use only the KPI numbers shown on this dashboard.</p>
         </>
       )}
       {bullets && bullets.length === 0 && <p className="muted">No insights returned.</p>}
-      <Button onClick={summarize} disabled={loading}>{loading ? 'Summarizing…' : 'Summarize'}</Button>
+      <Button onClick={summarize} disabled={loading}>
+        {loading ? 'Summarizing…' : 'Summarize'}
+      </Button>
     </Card>
   );
 }

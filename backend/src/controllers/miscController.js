@@ -32,7 +32,11 @@ export const listAuditLogs = asyncHandler(async (req, res) => {
     }
   }
   const total = await AuditLog.countDocuments(filter);
-  const logs = await AuditLog.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).populate('actor', 'name email role');
+  const logs = await AuditLog.find(filter)
+    .sort({ createdAt: -1 })
+    .skip((page - 1) * limit)
+    .limit(limit)
+    .populate('actor', 'name email role');
   res.status(200).json({ success: true, count: logs.length, total, page, pages: Math.ceil(total / limit), logs });
 });
 

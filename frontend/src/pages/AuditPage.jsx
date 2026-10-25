@@ -19,19 +19,32 @@ export default function AuditPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const load = async (p = page) => {
-    setError(''); setLoading(true);
+    setError('');
+    setLoading(true);
     try {
       const params = { page: p, limit: 50 };
       for (const [k, v] of Object.entries(filters)) if (v) params[k] = v;
       const d = await listAuditLogs(params);
-      setLogs(d.logs); setPages(d.pages || 1); setTotal(d.total || 0); setPage(d.page || p);
-    } catch (e) { setError(getErrorMessage(e)); } finally { setLoading(false); }
+      setLogs(d.logs);
+      setPages(d.pages || 1);
+      setTotal(d.total || 0);
+      setPage(d.page || p);
+    } catch (e) {
+      setError(getErrorMessage(e));
+    } finally {
+      setLoading(false);
+    }
   };
-  useEffect(() => { load(1); }, []);
+  useEffect(() => {
+    load(1);
+  }, []);
   const set = (k) => (e) => setFilters((f) => ({ ...f, [k]: e.target.value }));
   return (
     <>
-      <PageHeader title="Audit log" subtitle="Admin only. The log is never editable or deletable — there is no update or delete endpoint for it." />
+      <PageHeader
+        title="Audit log"
+        subtitle="Admin only. The log is never editable or deletable — there is no update or delete endpoint for it."
+      />
       {error && <ErrorState message={error} onRetry={() => load(1)} />}
       <Card title="Filters">
         <div className="form-row">
@@ -41,11 +54,19 @@ export default function AuditPage() {
           <Input label="From" type="date" value={filters.from} onChange={set('from')} />
           <Input label="To" type="date" value={filters.to} onChange={set('to')} />
         </div>
-        <p className="page-actions"><Button onClick={() => load(1)}>Apply filters</Button></p>
+        <p className="page-actions">
+          <Button onClick={() => load(1)}>Apply filters</Button>
+        </p>
       </Card>
       <Card title={`Entries (${total}) — page ${page} of ${pages}`}>
-        {loading ? <Skeleton lines={5} /> : logs.length === 0 ? (
-          <EmptyState icon="📋" title="No audit entries match these filters" text="Try widening the date range or clearing a filter." />
+        {loading ? (
+          <Skeleton lines={5} />
+        ) : logs.length === 0 ? (
+          <EmptyState
+            icon="📋"
+            title="No audit entries match these filters"
+            text="Try widening the date range or clearing a filter."
+          />
         ) : (
           <DataTable
             columns={[
@@ -60,8 +81,12 @@ export default function AuditPage() {
           />
         )}
         <p className="pager">
-          <Button variant="ghost" className="btn-sm" disabled={page <= 1} onClick={() => load(page - 1)}>Previous</Button>
-          <Button variant="ghost" className="btn-sm" disabled={page >= pages} onClick={() => load(page + 1)}>Next</Button>
+          <Button variant="ghost" className="btn-sm" disabled={page <= 1} onClick={() => load(page - 1)}>
+            Previous
+          </Button>
+          <Button variant="ghost" className="btn-sm" disabled={page >= pages} onClick={() => load(page + 1)}>
+            Next
+          </Button>
         </p>
       </Card>
     </>

@@ -6,10 +6,22 @@ import { adminDashboard, employeeDashboard, hrDashboard } from '../controllers/d
 
 // Query validation (the shared validate() middleware only covers bodies).
 const dashboardQuerySchema = z.object({
-  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'from must be YYYY-MM-DD').optional(),
-  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'to must be YYYY-MM-DD').optional(),
-  department: z.string().regex(/^[0-9a-fA-F]{24}$/, 'department must be a valid id').optional(),
-  employeeId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'employeeId must be a valid id').optional(),
+  from: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'from must be YYYY-MM-DD')
+    .optional(),
+  to: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'to must be YYYY-MM-DD')
+    .optional(),
+  department: z
+    .string()
+    .regex(/^[0-9a-fA-F]{24}$/, 'department must be a valid id')
+    .optional(),
+  employeeId: z
+    .string()
+    .regex(/^[0-9a-fA-F]{24}$/, 'employeeId must be a valid id')
+    .optional(),
 });
 
 const validateQuery = (req, _res, next) => {

@@ -31,6 +31,7 @@ export const importEmployees = async (csv) => (await api.post('/employees/import
 
 export const checkIn = async (location = null) => (await api.post('/attendance/check-in', location || {})).data;
 export const checkOut = async () => (await api.post('/attendance/check-out')).data;
+export const cameraCheckIn = async (data) => (await api.post('/attendance/check-in/camera', data)).data;
 export const myAttendance = async () => (await api.get('/attendance/me')).data;
 export const attendanceBoard = async (date) => (await api.get('/attendance/board', { params: { date } })).data;
 export const requestCorrection = async (data) => (await api.post('/attendance/corrections', data)).data;

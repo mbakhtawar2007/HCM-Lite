@@ -10,8 +10,8 @@ router.use(protect);
 
 router.get('/balances', requireRole('ADMIN', 'HR', 'EMPLOYEE'), getBalances);
 router.get('/', requireRole('ADMIN', 'HR', 'EMPLOYEE'), listLeaves);
-router.post('/', requireRole('EMPLOYEE'), validate(leaveApplySchema), applyLeave);
-router.patch('/:id/cancel', requireRole('EMPLOYEE'), cancelLeave);
+router.post('/', requireRole('EMPLOYEE', 'HR', 'ADMIN'), validate(leaveApplySchema), applyLeave);
+router.patch('/:id/cancel', requireRole('EMPLOYEE', 'HR', 'ADMIN'), cancelLeave);
 router.patch('/:id/decision', requireRole('ADMIN', 'HR'), validate(leaveDecisionSchema), decideLeave);
 
 export default router;

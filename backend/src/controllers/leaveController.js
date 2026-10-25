@@ -12,7 +12,7 @@ import {
   dayStart,
 } from '../services/settingsService.js';
 import { notifyUser, writeAudit } from '../services/attendanceService.js';
-import { ownEmployee } from '../utils/scope.js';
+import { ownEmployee, ownEmployeeForSelfService } from '../utils/scope.js';
 import { assertEnumQuery, assertObjectIdQuery } from '../utils/queryGuard.js';
 
 // Phase 1 fix: previously every approved leave overlapping a year
@@ -50,7 +50,13 @@ export const getBalances = asyncHandler(async (req, res) => {
     const own = await ownEmployee(req.user._id);
     employeeId = String(own._id);
   } else if (!employeeId) {
-    throw new ApiError(400, 'employeeId is required');
+    // Staff self-service: no employeeId given -> own linked record if
+    // one exists, otherwise the old 400 (staff list views pass an id).
+    try {
+      employeeId = String((await ownEmployee(req.user._id))._id);
+    } catch {
+      throw new ApiError(400, 'employeeId is required');
+    }
   }
   const year = parseInt(req.query.year, 10) || new Date().getUTCFullYear();
   const setting = await getSetting();
@@ -72,7 +78,7 @@ export const getBalances = asyncHandler(async (req, res) => {
 });
 
 export const applyLeave = asyncHandler(async (req, res) => {
-  const emp = await ownEmployee(req.user._id);
+  const emp = await ownEmployeeForSelfService(req.user._id, req.user.role);
   const leaveType = await LeaveType.findById(req.body.leaveType);
   if (!leaveType) throw notFoundError('Leave type not found');
   const setting = await getSetting();
@@ -129,16 +135,49 @@ export const listLeaves = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, count: leaves.length, leaves });
 });
 
+// 100%-pass B — cancellation, assumption in one line: an employee
+// may cancel their own leave while it is PENDING, or while it is
+// APPROVED but has not yet started (startDate > today); cancelling a
+// leave that has started or is in the past stays blocked, and cancelling
+// someone else's leave stays 403. Cancelling an approved leave restores
+// the balance automatically, because balances count APPROVED only.
+// HR/Admin do NOT cancel on someone else's behalf here (they approve /
+// reject); a staff user cancels only their own linked record's leave.
 export const cancelLeave = asyncHandler(async (req, res) => {
   const leave = await LeaveRequest.findById(req.params.id);
   if (!leave) throw notFoundError('Leave request not found');
-  const own = await ownEmployee(req.user._id);
+  const own = await ownEmployeeForSelfService(req.user._id, req.user.role);
   if (String(leave.employee) !== String(own._id)) throw forbidden('You can only cancel your own leave');
-  if (leave.status !== 'PENDING') throw conflict('Only pending leave can be cancelled');
+  if (leave.status === 'PENDING') {
+    // fall through to cancel below
+  } else if (leave.status === 'APPROVED') {
+    const today = dayStart(new Date());
+    if (dayStart(leave.startDate) <= today)
+      throw conflict('An approved leave that has already started cannot be cancelled');
+  } else {
+    throw conflict('Only pending or approved future leave can be cancelled');
+  }
   const beforeCancel = leave.toJSON();
   leave.status = 'CANCELLED';
   await leave.save();
   await writeAudit(req, 'UPDATE', 'LeaveRequest', leave._id, beforeCancel, leave.toJSON());
+  // Notify HR/Admin (not the employee themselves): an approved leave
+  // disappearing changes the board / headcount, so staff must know.
+  try {
+    const { User } = await import('../models/User.js');
+    const staff = await User.find({ role: { $in: ['HR', 'ADMIN'] }, isActive: true, _id: { $ne: req.user._id } });
+    for (const s of staff) {
+      await notifyUser(
+        s._id,
+        'LEAVE_CANCELLED',
+        'Leave cancelled',
+        `A leave (${leave.startDate.toISOString().slice(0, 10)} to ${leave.endDate.toISOString().slice(0, 10)}) was cancelled.`,
+        leave._id,
+      );
+    }
+  } catch {
+    // Notification failure must not undo the cancellation.
+  }
   res.status(200).json({ success: true, leave });
 });
 

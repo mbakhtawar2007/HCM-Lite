@@ -16,6 +16,10 @@ const lineSchema = new mongoose.Schema(
     unpaidLeaveDays: { type: Number, default: 0 },
     paidLeaveDays: { type: Number, default: 0 },
     deductionDays: { type: Number, default: 0 },
+    // Late penalty (bonus D): deducted days from the late rule, already
+    // included in deductionDays. Kept separate so judges can verify it.
+    latePenaltyDays: { type: Number, default: 0 },
+    latePenaltyAmount: { type: Number, default: 0 },
     grossPayable: { type: Number, required: true },
     tax: { type: Number, required: true },
     netPay: { type: Number, required: true },

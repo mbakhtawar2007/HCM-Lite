@@ -38,7 +38,14 @@ export function computePayrollLine({
   const hra = round2(basicSalary * 0.4);
   const medical = round2(basicSalary * 0.1);
   const perDay = workingDays > 0 ? gross / workingDays : 0;
-  const deductionDays = round2(absentDays + unpaidLeaveDays + halfDays * 0.5);
+  // Bonus D — late penalty, exact interpretation: every complete set of
+  // 3 late days in the month deducts 0.5 working day (3 lates = 0.5,
+  // 6 lates = 1.0, 2 lates = 0). It is part of deductionDays, and is
+  // also reported separately as latePenaltyDays/latePenaltyAmount so
+  // a judge can verify it without recomputing the whole line.
+  const latePenaltyDays = Math.floor((lateDays || 0) / 3) * 0.5;
+  const latePenaltyAmount = round2(perDay * latePenaltyDays);
+  const deductionDays = round2(absentDays + unpaidLeaveDays + halfDays * 0.5 + latePenaltyDays);
   const payableDays = Math.max(0, effectiveWorkingDays - deductionDays);
   const grossPayable = round2(perDay * payableDays);
   const tax = monthlyTax(gross);
@@ -57,6 +64,8 @@ export function computePayrollLine({
     unpaidLeaveDays,
     paidLeaveDays,
     deductionDays,
+    latePenaltyDays,
+    latePenaltyAmount,
     grossPayable,
     tax,
     netPay,

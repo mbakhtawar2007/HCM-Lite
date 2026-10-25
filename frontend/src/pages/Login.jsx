@@ -31,32 +31,35 @@ export default function Login() {
 
   return (
     <>
-      <PageHeader title="Login" subtitle="Sign in with the login created for you. First sign-in uses a temporary password." />
+      <PageHeader
+        title="Login"
+        subtitle="Sign in with the login created for you. First sign-in uses a temporary password."
+      />
       <Card title="Login">
-      <form onSubmit={handleSubmit} className="form">
-        {error && <p className="alert alert-error">{error}</p>}
-        <Input
-          label="Email"
-          type="email"
-          required
-          value={form.email}
-          onChange={(e) => setForm({ ...form, email: e.target.value })}
-        />
-        <Input
-          label="Password"
-          type="password"
-          required
-          value={form.password}
-          onChange={(e) => setForm({ ...form, password: e.target.value })}
-        />
-        <Button type="submit" disabled={busy}>
-          {busy ? 'Logging in…' : 'Login'}
-        </Button>
-        <p className="muted">
-          First time here? <Link to="/setup">Set up HCM Lite</Link> — it creates
-          the company and the first Admin account.
-        </p>
-      </form>
+        <form onSubmit={handleSubmit} className="form">
+          {error && <p className="alert alert-error">{error}</p>}
+          <Input
+            label="Email"
+            type="email"
+            required
+            value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
+          />
+          <Input
+            label="Password"
+            type="password"
+            required
+            value={form.password}
+            onChange={(e) => setForm({ ...form, password: e.target.value })}
+          />
+          <Button type="submit" disabled={busy}>
+            {busy ? 'Logging in…' : 'Login'}
+          </Button>
+          <p className="muted">
+            First time here? <Link to="/setup">Set up HCM Lite</Link> — it creates the company and the first Admin
+            account.
+          </p>
+        </form>
       </Card>
     </>
   );

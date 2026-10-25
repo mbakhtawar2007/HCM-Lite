@@ -2,7 +2,17 @@ import express from 'express';
 import { protect } from '../middleware/auth.js';
 import { requireRole } from '../middleware/requireRole.js';
 import { validate } from '../middleware/validate.js';
-import { createEmployee, exportEmployeesCsv, getEmployee, getEmployee360, getMyEmployee, importDryRun, importEmployees, listEmployees, updateEmployee } from '../controllers/employeeController.js';
+import {
+  createEmployee,
+  exportEmployeesCsv,
+  getEmployee,
+  getEmployee360,
+  getMyEmployee,
+  importDryRun,
+  importEmployees,
+  listEmployees,
+  updateEmployee,
+} from '../controllers/employeeController.js';
 import { createEmployeeSchema, importDryRunSchema, updateEmployeeSchema } from '../validation/p1Validation.js';
 
 const router = express.Router();

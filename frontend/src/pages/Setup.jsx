@@ -41,65 +41,72 @@ export default function Setup() {
     }
   };
 
-  if (!status && !error) return <><PageHeader title="Set up HCM Lite" /><Skeleton lines={4} /></>;
+  if (!status && !error)
+    return (
+      <>
+        <PageHeader title="Set up HCM Lite" />
+        <Skeleton lines={4} />
+      </>
+    );
 
   if (status && !status.needsSetup) {
     return (
       <>
-      <PageHeader title="Set up HCM Lite" />
-      <Card title="Setup already complete">
-        <p className="muted">
-          A company and Admin account already exist. Sign in to continue.
-        </p>
-        <Link className="btn btn-primary" to="/login">
-          Go to login
-        </Link>
-      </Card>
+        <PageHeader title="Set up HCM Lite" />
+        <Card title="Setup already complete">
+          <p className="muted">A company and Admin account already exist. Sign in to continue.</p>
+          <Link className="btn btn-primary" to="/login">
+            Go to login
+          </Link>
+        </Card>
       </>
     );
   }
 
   return (
     <>
-      <PageHeader title="Set up HCM Lite" subtitle="First run: name your company and create the first Admin account. This page only works until the first account exists." />
+      <PageHeader
+        title="Set up HCM Lite"
+        subtitle="First run: name your company and create the first Admin account. This page only works until the first account exists."
+      />
       <Card title="Set up HCM Lite">
-      <p className="muted">
-        First run: name your company and create the first Admin account. This page
-        only works until the first account exists.
-      </p>
-      <form onSubmit={handleSubmit} className="form">
-        {error && <p className="alert alert-error">{error}</p>}
-        <Input
-          label="Company name"
-          required
-          value={form.companyName}
-          onChange={(e) => setForm({ ...form, companyName: e.target.value })}
-        />
-        <Input
-          label="Admin name"
-          required
-          value={form.adminName}
-          onChange={(e) => setForm({ ...form, adminName: e.target.value })}
-        />
-        <Input
-          label="Admin email"
-          type="email"
-          required
-          value={form.adminEmail}
-          onChange={(e) => setForm({ ...form, adminEmail: e.target.value })}
-        />
-        <Input
-          label="Admin password (at least 8 characters)"
-          type="password"
-          required
-          minLength={8}
-          value={form.adminPassword}
-          onChange={(e) => setForm({ ...form, adminPassword: e.target.value })}
-        />
-        <Button type="submit" disabled={busy}>
-          {busy ? 'Setting up…' : 'Create company and Admin'}
-        </Button>
-      </form>
+        <p className="muted">
+          First run: name your company and create the first Admin account. This page only works until the first account
+          exists.
+        </p>
+        <form onSubmit={handleSubmit} className="form">
+          {error && <p className="alert alert-error">{error}</p>}
+          <Input
+            label="Company name"
+            required
+            value={form.companyName}
+            onChange={(e) => setForm({ ...form, companyName: e.target.value })}
+          />
+          <Input
+            label="Admin name"
+            required
+            value={form.adminName}
+            onChange={(e) => setForm({ ...form, adminName: e.target.value })}
+          />
+          <Input
+            label="Admin email"
+            type="email"
+            required
+            value={form.adminEmail}
+            onChange={(e) => setForm({ ...form, adminEmail: e.target.value })}
+          />
+          <Input
+            label="Admin password (at least 8 characters)"
+            type="password"
+            required
+            minLength={8}
+            value={form.adminPassword}
+            onChange={(e) => setForm({ ...form, adminPassword: e.target.value })}
+          />
+          <Button type="submit" disabled={busy}>
+            {busy ? 'Setting up…' : 'Create company and Admin'}
+          </Button>
+        </form>
       </Card>
     </>
   );

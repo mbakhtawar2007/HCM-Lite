@@ -2,8 +2,21 @@ import express from 'express';
 import { protect } from '../middleware/auth.js';
 import { requireRole } from '../middleware/requireRole.js';
 import { validate } from '../middleware/validate.js';
-import { departments, designations, getSettingCtrl, holidays, leaveTypes, updateSetting } from '../controllers/orgController.js';
-import { departmentSchema, designationSchema, holidaySchema, leaveTypeSchema, settingSchema } from '../validation/p1Validation.js';
+import {
+  departments,
+  designations,
+  getSettingCtrl,
+  holidays,
+  leaveTypes,
+  updateSetting,
+} from '../controllers/orgController.js';
+import {
+  departmentSchema,
+  designationSchema,
+  holidaySchema,
+  leaveTypeSchema,
+  settingSchema,
+} from '../validation/p1Validation.js';
 
 const router = express.Router();
 router.use(protect);

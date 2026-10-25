@@ -1,11 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { fetchMe, loginUser, logoutUser } from '../api/auth.js';
-import {
-  clearStoredToken,
-  getStoredToken,
-  setUnauthorizedHandler,
-  storeToken,
-} from '../api/client.js';
+import { clearStoredToken, getStoredToken, setUnauthorizedHandler, storeToken } from '../api/client.js';
 
 const AuthContext = createContext(null);
 
@@ -45,10 +40,7 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
-  const value = useMemo(
-    () => ({ user, loading, login, logout }),
-    [user, loading],
-  );
+  const value = useMemo(() => ({ user, loading, login, logout }), [user, loading]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

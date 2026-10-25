@@ -17,11 +17,14 @@ export default function Dashboard() {
 
   return (
     <>
-      <PageHeader title={`Welcome, ${user?.name}`} subtitle={`Signed in as ${user?.email} · Role: ${user?.role}${user?.mustChangePassword ? ' · You must change your password on first sign-in.' : ''}`} />
+      <PageHeader
+        title={`Welcome, ${user?.name}`}
+        subtitle={`Signed in as ${user?.email} · Role: ${user?.role}${user?.mustChangePassword ? ' · You must change your password on first sign-in.' : ''}`}
+      />
       <Card title={rolePage.label}>
         <p className="muted">
-          Employees, attendance, leave and payroll, server-computed dashboards, the AI assistant,
-          and audit, announcements and notifications are all live. Open your role dashboard below.
+          Employees, attendance, leave and payroll, server-computed dashboards, the AI assistant, and audit,
+          announcements and notifications are all live. Open your role dashboard below.
         </p>
         <Link className="btn btn-primary" to={rolePage.path}>
           Open {rolePage.label.toLowerCase()}

@@ -19,7 +19,14 @@ export function ToastProvider({ children }) {
         {toasts.map((t) => (
           <div key={t.id} className={`toast${t.isError ? ' toast-error' : ''}`} role="status">
             <span>{t.message}</span>
-            <button type="button" className="btn btn-ghost btn-sm" aria-label="Dismiss notification" onClick={() => dismiss(t.id)}>✕</button>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              aria-label="Dismiss notification"
+              onClick={() => dismiss(t.id)}
+            >
+              ✕
+            </button>
           </div>
         ))}
       </div>
