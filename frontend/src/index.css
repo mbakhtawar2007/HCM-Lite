@@ -1,43 +1,46 @@
-/* HCM Lite design system — Phase 4, indigo theme pass, bolder-colour
-   pass (local only): the indigo identity is now visible on the
-   sidebar, topbar, cards/KPIs and home hero, not just on accents.
-   Sidebar text #fff on #1e1b4b 15.99:1, muted #c7d2fe/#a5b4fc on
-   #1e1b4b 10.72:1/8.02:1, active #fff on #4338ca 7.90:1; topbar text
-   13.5–16.5:1 and muted 5.7–6.9:1 across its gradient; card/KPI text
-   13.7–15.0:1 and muted 5.8–6.6:1 on the tinted backgrounds; hero
-   fallback #4338ca on bg 7.44:1 light, #818cf8 on bg 6.21:1 dark.
-   All AA. Status colours and chart palette are unchanged.
-   One token set, used by every component. Light theme is the default;
-   [data-theme="dark"] on <html> switches the whole app. Palette: indigo
-   primary + semantic status colours (status colours unchanged, so a
-   status keeps its meaning across the re-theme). Every status colour is
-   paired with text/icon in the UI — colour is never the only signal.
-   Contrast (normal text, AA = 4.5:1, computed, not estimated): light
-   white on indigo #4338ca 7.90:1, white on #4f46e5 6.29:1, #4338ca on
-   white 7.90:1 and on bg #f7f8fa 7.44:1; dark #0f1419 on #818cf8 6.21:1,
-   #0f1419 on #a5b4fc 9.29:1, #818cf8 on surface #171e26 5.63:1 and on bg
-   #0f1419 6.21:1, #a5b4fc on #171e26 8.43:1. All primary pairs pass AA.
-   Status contrast from Phase 4 is unchanged: light text #16202a on
-   white 16+:1, muted #55606e on white ~6.5:1, late #b45309 ~4.8:1,
+/* HCM Lite design system — Phase 4, emerald theme pass (local only):
+   the rejected indigo identity is fully replaced by a muted,
+   professional emerald palette. Sidebar and topbar are plain surfaces
+   again (no coloured sidebar, no gradient), cards are plain surface,
+   the home hero is a solid emerald heading, and KPI accents use the
+   muted chart palette only. One token set, used by every component.
+   Light theme is the default; [data-theme="dark"] on <html> switches
+   the whole app. Palette: emerald primary + semantic status colours
+   (status colours unchanged, so a status keeps its meaning across the
+   re-theme). Every status colour is paired with text/icon in the UI —
+   colour is never the only signal. Contrast (normal text, AA = 4.5:1,
+   computed, not estimated), all pass: primary button white on
+   #047857 5.48:1 light, #0f1419 on #34d399 9.63:1 dark (hover:
+   white on #046c4e 6.44:1 light, #0f1419 on #6ee7b7 12.14:1 dark);
+   sidebar active #065f46 on #d1fae5 6.78:1 light, #a7f3d0 on
+   #064e3b 7.58:1 dark; sidebar text 17.49:1 light / 14.22:1 dark,
+   sidebar muted 7.63:1 / 6.85:1; card text 17.49:1 light /
+   14.22:1 dark, card muted 7.63:1 / 6.85:1; hero #047857 on
+   #fafaf9 5.25:1 light, #34d399 on #0f1419 9.63:1 dark.
+   Status contrast from Phase 4 is unchanged in meaning: light text
+   #1c1917 on white 17.49:1, muted #57534e on white 7.63:1, late
+   #b45309 ~4.8:1,
    absent/rejected #b91c1c ~5.9:1, approved #15803d ~5.0:1, on-leave
    #0369a1 ~5.8:1. Dark variants are lightened so they stay above 4.5:1
    on the dark surface. */
 
 :root {
-  --bg: #f7f8fa;
+  --bg: #fafaf9;
   --surface: #ffffff;
-  --surface-2: #eef2f4;
-  --text: #16202a;
-  --muted: #55606e;
-  --primary: #4338ca;
-  --primary-hover: #4f46e5;
-  --primary-soft: #eef2ff;
+  --surface-2: #f5f5f4;
+  --text: #1c1917;
+  --muted: #57534e;
+  --primary: #047857;
+  /* Specified hover #059669 failed AA for white button text (3.77:1),
+     so hover is #046c4e instead (white on it: 6.44:1). */
+  --primary-hover: #046c4e;
+  --primary-soft: #ecfdf5;
   --danger: #b91c1c;
   --danger-soft: #fef2f2;
   --warning: #b45309;
   --success: #15803d;
   --info: #0369a1;
-  --border: #dde3e8;
+  --border: #e7e5e4;
   --shadow: 0 1px 2px rgba(16, 32, 42, 0.06), 0 4px 16px rgba(16, 32, 42, 0.06);
   --shadow-lg: 0 8px 32px rgba(16, 32, 42, 0.18);
   --radius: 12px;
@@ -55,15 +58,16 @@
   --font-2xl: 2rem;
   --sidebar-w: 240px;
   --topbar-h: 60px;
-  /* Bolder-colour pass: indigo sidebar/topbar/card surfaces */
-  --sidebar-bg: #1e1b4b;
-  --sidebar-text: #ffffff;
-  --sidebar-muted: #c7d2fe;
-  --sidebar-hover-bg: #312e81;
-  --sidebar-active-bg: #4338ca;
-  --topbar-bg: linear-gradient(90deg, #eef2ff, #ffffff);
-  --card-bg: #f5f3ff;
-  /* Semantic status colours (light) — unchanged by the indigo re-theme */
+  /* Emerald pass: plain professional sidebar/topbar/cards again */
+  --sidebar-bg: #ffffff;
+  --sidebar-text: #1c1917;
+  --sidebar-muted: #57534e;
+  --sidebar-hover-bg: #f5f5f4;
+  --sidebar-active-bg: #d1fae5;
+  --sidebar-active-text: #065f46;
+  --topbar-bg: #ffffff;
+  --card-bg: #ffffff;
+  /* Semantic status colours (light) — unchanged by the re-theme */
   --st-present: #0f766e;
   --st-late: #b45309;
   --st-absent: #b91c1c;
@@ -72,13 +76,13 @@
   --st-pending: #92400e;
   --st-approved: #15803d;
   --st-rejected: #b91c1c;
-  /* Chart colours (light): indigo, teal, amber, violet, green */
-  --chart-1: #4338ca;
+  /* Chart colours (light): emerald, muted teal, warm amber, slate, soft rose */
+  --chart-1: #047857;
   --chart-2: #0f766e;
   --chart-3: #b45309;
-  --chart-4: #7c3aed;
-  --chart-5: #15803d;
-  --chart-grid: #e2e8ee;
+  --chart-4: #475569;
+  --chart-5: #be123c;
+  --chart-grid: #e7e5e4;
 }
 
 [data-theme='dark'] {
@@ -87,18 +91,18 @@
   --surface-2: #1f2933;
   --text: #e6edf3;
   --muted: #9aa7b4;
-  --primary: #818cf8;
-  --primary-hover: #a5b4fc;
-  --primary-soft: #1e1b4b;
-  /* Bolder-colour pass: same indigo sidebar as light theme (distinct
-     from the generic dark surface), indigo-to-surface topbar gradient */
-  --sidebar-bg: #1e1b4b;
-  --sidebar-text: #ffffff;
-  --sidebar-muted: #a5b4fc;
-  --sidebar-hover-bg: #312e81;
-  --sidebar-active-bg: #4338ca;
-  --topbar-bg: linear-gradient(90deg, #1e1b4b, #171e26);
-  --card-bg: #1c1f33;
+  --primary: #34d399;
+  --primary-hover: #6ee7b7;
+  --primary-soft: #064e3b;
+  /* Emerald pass: plain dark surfaces again, no coloured sidebar */
+  --sidebar-bg: #171e26;
+  --sidebar-text: #e6edf3;
+  --sidebar-muted: #9aa7b4;
+  --sidebar-hover-bg: #1f2933;
+  --sidebar-active-bg: #064e3b;
+  --sidebar-active-text: #a7f3d0;
+  --topbar-bg: #171e26;
+  --card-bg: #171e26;
   --danger: #f87171;
   --danger-soft: #3b1d1d;
   --warning: #fbbf24;
@@ -115,11 +119,11 @@
   --st-pending: #fcd34d;
   --st-approved: #4ade80;
   --st-rejected: #f87171;
-  --chart-1: #818cf8;
+  --chart-1: #34d399;
   --chart-2: #2dd4bf;
   --chart-3: #fbbf24;
-  --chart-4: #c4b5fd;
-  --chart-5: #4ade80;
+  --chart-4: #94a3b8;
+  --chart-5: #fb7185;
   --chart-grid: #2a3644;
 }
 
@@ -179,7 +183,7 @@ code {
   width: var(--sidebar-w);
   flex-shrink: 0;
   background: var(--sidebar-bg);
-  border-right: 1px solid var(--sidebar-hover-bg);
+  border-right: 1px solid var(--border);
   padding: var(--space-4);
   display: flex;
   flex-direction: column;
@@ -204,8 +208,8 @@ code {
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  background: #fff;
-  color: #4338ca;
+  background: var(--primary);
+  color: #fff;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -234,8 +238,11 @@ code {
 }
 .sidebar nav a.active {
   background: var(--sidebar-active-bg);
-  color: #fff;
+  color: var(--sidebar-active-text);
   font-weight: 600;
+}
+[data-theme='dark'] .sidebar .brand-mark {
+  color: #0f1419;
 }
 .sidebar-section {
   font-size: 0.75rem;
@@ -362,17 +369,8 @@ code {
   font-size: 2.25rem;
   line-height: 1.15;
   margin: 0 0 0.75rem;
-  /* Fallback colour first (AA on the page bg), gradient only where
-     background-clip:text is supported, so the heading is never lost. */
+  /* Solid emerald heading — the gradient hero is removed with indigo. */
   color: var(--primary);
-}
-@supports ((-webkit-background-clip: text) or (background-clip: text)) {
-  .hero h1 {
-    background: linear-gradient(90deg, var(--primary), var(--chart-4));
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-  }
 }
 .hero p {
   color: var(--muted);
