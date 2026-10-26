@@ -19,6 +19,7 @@ import EmptyState from '../components/ui/EmptyState.jsx';
 import ErrorState from '../components/ui/ErrorState.jsx';
 import ConfirmDialog from '../components/ui/ConfirmDialog.jsx';
 import { useToast } from '../components/ui/Toast.jsx';
+import { HBarChart } from '../components/Charts.jsx';
 import { getErrorMessage } from '../utils/errors.js';
 
 export default function PayrollPage() {
@@ -114,6 +115,25 @@ export default function PayrollPage() {
               </Button>
             </form>
           </Card>
+          {!loading && runs.some((r) => r.status === 'FINALIZED') && (
+            <Card title="Finalized payroll totals by month">
+              <HBarChart
+                data={runs
+                  .filter((r) => r.status === 'FINALIZED')
+                  .map((r) => ({
+                    month: r.month,
+                    total: (r.lines || []).reduce((s, l) => s + (Number(l.netPay) || 0), 0),
+                  }))
+                  .sort((a, b) => (a.month < b.month ? -1 : 1))}
+                label={(r) => r.month}
+                value={(r) => r.total}
+                format={(v) => `Rs ${v}`}
+              />
+              <p className="muted">
+                Each total is the sum of that run&apos;s already-loaded line net pays. Drafts are excluded.
+              </p>
+            </Card>
+          )}
           <Card title="Payroll runs">
             {loading ? (
               <Skeleton lines={4} />
@@ -206,42 +226,55 @@ export default function PayrollPage() {
           )}
         </>
       ) : (
-        <Card title="My payslips (finalized only)">
-          {loading ? (
-            <Skeleton lines={4} />
-          ) : mine.length === 0 ? (
-            <EmptyState
-              icon="₨"
-              title="No finalized payslips yet"
-              text="Drafts are not shown to employees. Once Admin finalizes a month, your payslip appears here."
-            />
-          ) : (
-            <DataTable
-              columns={[
-                { key: 'month', label: 'Month', render: (p) => <strong>{p.month}</strong> },
-                { key: 'net', label: 'Net pay', render: (p) => `Rs ${p.netPay}` },
-                { key: 'gross', label: 'Gross payable', render: (p) => `Rs ${p.grossPayable}` },
-                { key: 'tax', label: 'Tax', render: (p) => `Rs ${p.tax}` },
-                {
-                  key: 'pdf',
-                  label: '',
-                  render: (p) => (
-                    <Button
-                      variant="ghost"
-                      className="btn-sm"
-                      onClick={() => downloadPayslipPdf(p.runId, p.employee, p.month)}
-                    >
-                      PDF
-                    </Button>
-                  ),
-                },
-              ]}
-              rows={mine}
-              sortKeys={{ month: (p) => p.month || '' }}
-              emptyText="No finalized payslips yet."
-            />
+        <>
+          {!loading && mine.length > 0 && (
+            <Card title="My net pay by month">
+              <HBarChart
+                data={[...mine].sort((a, b) => (a.month < b.month ? -1 : 1))}
+                label={(p) => p.month}
+                value={(p) => p.netPay}
+                format={(v) => `Rs ${v}`}
+              />
+              <p className="muted">Finalized payslips only, from the payslips listed below.</p>
+            </Card>
           )}
-        </Card>
+          <Card title="My payslips (finalized only)">
+            {loading ? (
+              <Skeleton lines={4} />
+            ) : mine.length === 0 ? (
+              <EmptyState
+                icon="₨"
+                title="No finalized payslips yet"
+                text="Drafts are not shown to employees. Once Admin finalizes a month, your payslip appears here."
+              />
+            ) : (
+              <DataTable
+                columns={[
+                  { key: 'month', label: 'Month', render: (p) => <strong>{p.month}</strong> },
+                  { key: 'net', label: 'Net pay', render: (p) => `Rs ${p.netPay}` },
+                  { key: 'gross', label: 'Gross payable', render: (p) => `Rs ${p.grossPayable}` },
+                  { key: 'tax', label: 'Tax', render: (p) => `Rs ${p.tax}` },
+                  {
+                    key: 'pdf',
+                    label: '',
+                    render: (p) => (
+                      <Button
+                        variant="ghost"
+                        className="btn-sm"
+                        onClick={() => downloadPayslipPdf(p.runId, p.employee, p.month)}
+                      >
+                        PDF
+                      </Button>
+                    ),
+                  },
+                ]}
+                rows={mine}
+                sortKeys={{ month: (p) => p.month || '' }}
+                emptyText="No finalized payslips yet."
+              />
+            )}
+          </Card>
+        </>
       )}
       {finalizeId && (
         <ConfirmDialog

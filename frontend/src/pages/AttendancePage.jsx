@@ -21,6 +21,7 @@ import EmptyState from '../components/ui/EmptyState.jsx';
 import ErrorState from '../components/ui/ErrorState.jsx';
 import { getErrorMessage } from '../utils/errors.js';
 import CameraCheckIn from '../components/CameraCheckIn.jsx';
+import { DonutChart } from '../components/Charts.jsx';
 
 export default function AttendancePage() {
   const { user } = useAuth();
@@ -87,6 +88,19 @@ export default function AttendancePage() {
     const loc = await getLocation();
     await checkIn(loc);
   };
+  // Status split, counted only from records this page already loaded:
+  // staff see today's board rows (b.status), employees see their own
+  // loaded records (a.status). No date range exists on this page, so
+  // there is no per-day trend to draw — a split is the truthful chart.
+  const statusSource = isStaff ? board : mine;
+  const statusCounts = statusSource.reduce((acc, r) => {
+    const s = r.status || 'UNKNOWN';
+    acc[s] = (acc[s] || 0) + 1;
+    return acc;
+  }, {});
+  const statusData = Object.entries(statusCounts)
+    .map(([label, value]) => ({ label, value }))
+    .sort((a, b) => b.value - a.value);
   return (
     <>
       <PageHeader
@@ -120,6 +134,16 @@ export default function AttendancePage() {
           </div>
         </Card>
       }
+      {!loading && statusData.length > 0 && (
+        <Card title={isStaff ? "Today's status split" : 'My attendance by status'}>
+          <DonutChart data={statusData} format={(v) => `${v}`} />
+          <p className="muted">
+            {isStaff
+              ? 'Counted from the daily board rows below (today only).'
+              : 'Counted from your attendance records loaded on this page.'}
+          </p>
+        </Card>
+      )}
       {isStaff ? (
         <Card title="Daily board (today)">
           {loading ? (

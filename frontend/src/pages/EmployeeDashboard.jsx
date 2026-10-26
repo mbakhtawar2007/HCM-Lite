@@ -10,6 +10,7 @@ import KpiCard from '../components/ui/KpiCard.jsx';
 import Badge from '../components/ui/Badge.jsx';
 import Button from '../components/ui/Button.jsx';
 import { PageSkeleton } from '../components/ui/Skeleton.jsx';
+import { LeaveUsageChart } from '../components/Charts.jsx';
 import EmptyState from '../components/ui/EmptyState.jsx';
 import ErrorState from '../components/ui/ErrorState.jsx';
 import { getErrorMessage } from '../utils/errors.js';
@@ -177,6 +178,16 @@ export default function EmployeeDashboard() {
                   </li>
                 ))}
               </ul>
+            )}
+            {data.leaveBalances.length > 0 && (
+              <LeaveUsageChart
+                balances={data.leaveBalances.map((b) => ({
+                  name: b.leaveType.name,
+                  quota: b.quota,
+                  used: b.used,
+                  remaining: b.remaining,
+                }))}
+              />
             )}
             <p>
               <a href="/leaves">Apply for leave</a>

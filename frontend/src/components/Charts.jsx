@@ -38,6 +38,100 @@ export function HBarChart({ data, label, value, format = (v) => String(v), maxBa
   );
 }
 
+export function DonutChart({ data, format = (v) => String(v) }) {
+  const rows = (data || []).filter((r) => Number(r.value) > 0);
+  const total = rows.reduce((s, r) => s + Number(r.value), 0);
+  if (total === 0) return <p className="muted">No data for this chart yet.</p>;
+  const cx = 120;
+  const cy = 120;
+  const r = 80;
+  let angle = -Math.PI / 2;
+  const slices = rows.map((row, i) => {
+    const frac = Number(row.value) / total;
+    const start = angle;
+    const end = angle + frac * Math.PI * 2;
+    angle = end;
+    const x1 = cx + r * Math.cos(start);
+    const y1 = cy + r * Math.sin(start);
+    const x2 = cx + r * Math.cos(end);
+    const y2 = cy + r * Math.sin(end);
+    const large = frac > 0.5 ? 1 : 0;
+    return {
+      row,
+      frac,
+      d: `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z`,
+      cls: `chart-bar-${(i % 5) + 1}`,
+      color: `var(--chart-${(i % 5) + 1})`,
+    };
+  });
+  return (
+    <div className="chart-card">
+      <svg className="chart-svg" viewBox="0 0 240 240" role="img" aria-label="Donut chart">
+        {slices.map((s, i) => (
+          <path key={i} className="donut-slice" d={s.d} style={{ fill: s.color }}>
+            <title>{`${s.row.label}: ${format(s.row.value)} (${Math.round(s.frac * 100)}%)`}</title>
+          </path>
+        ))}
+      </svg>
+      <div className="chart-legend">
+        {slices.map((s, i) => (
+          <span key={i}>
+            <span className="swatch" style={{ background: s.color }} /> {s.row.label}: {format(s.row.value)} (
+            {Math.round(s.frac * 100)}%)
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function LeaveUsageChart({ balances }) {
+  const rows = balances || [];
+  if (rows.length === 0) return <p className="muted">No data for this chart yet.</p>;
+  const max = Math.max(...rows.map((b) => (b.quota === null ? b.used : Math.max(b.quota, b.used))), 1);
+  const rowH = 30;
+  const height = rows.length * rowH + 8;
+  return (
+    <div className="chart-card">
+      <svg className="chart-svg" viewBox={`0 0 560 ${height}`} role="img" aria-label="Leave usage chart">
+        {rows.map((b, i) => {
+          const y = 8 + i * rowH;
+          const barW = (b.quota === null ? b.used / max : b.quota / max) * 300;
+          const usedW = b.quota === null || b.quota === 0 ? barW : Math.min(barW, (b.used / b.quota) * barW);
+          return (
+            <g key={i}>
+              <text x="0" y={y + 15} textAnchor="start">
+                <title>{b.name}</title>
+                {truncate(b.name)}
+              </text>
+              <rect
+                className="chart-bar-5"
+                x="170"
+                y={y + 2}
+                width={Math.max(barW, b.used > 0 ? 4 : 0)}
+                height="18"
+                rx="4"
+              />
+              <rect className="chart-bar-1" x="170" y={y + 2} width={usedW} height="18" rx="4" />
+              <text x={176 + Math.max(barW, 4)} y={y + 15}>
+                {b.quota === null ? `${b.used} used (Unlimited)` : `${b.used} used · ${b.remaining} left of ${b.quota}`}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+      <div className="chart-legend">
+        <span>
+          <span className="swatch" style={{ background: 'var(--chart-1)' }} /> Used
+        </span>
+        <span>
+          <span className="swatch" style={{ background: 'var(--chart-5)' }} /> Remaining (limited types only)
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export function LineChart({ series, xLabels, format = (v) => String(v) }) {
   const all = series.flatMap((s) => s.points);
   if (all.length === 0) return <p className="muted">No data for this chart yet.</p>;
