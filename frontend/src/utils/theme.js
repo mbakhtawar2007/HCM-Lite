@@ -1,8 +1,8 @@
-// Theme: persisted in localStorage, respects prefers-color-scheme on
-// first load. The initial value is applied by public/theme-init.js
+// Theme: persisted in localStorage. First load (no saved choice) is
+// DARK — the initial value is applied by public/theme-init.js
 // (a same-origin script in <head>, so it satisfies the Phase 2 CSP
 // scriptSrc 'self' — no inline script) before React mounts, so there
-// is no flash of the wrong theme.
+// is no flash of the wrong theme. A saved choice always wins.
 export const THEME_KEY = 'hcm-lite-theme';
 
 export function getTheme() {
@@ -11,7 +11,7 @@ export function getTheme() {
   }
   const saved = localStorage.getItem(THEME_KEY);
   if (saved === 'light' || saved === 'dark') return saved;
-  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  return 'dark';
 }
 
 export function setTheme(theme) {

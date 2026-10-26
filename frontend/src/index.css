@@ -4,7 +4,8 @@
    again (no coloured sidebar, no gradient), cards are plain surface,
    the home hero is a solid emerald heading, and KPI accents use the
    muted chart palette only. One token set, used by every component.
-   Light theme is the default; [data-theme="dark"] on <html> switches
+   Dark theme is the default on first load (no saved choice); a saved
+   light choice still wins, and [data-theme="dark"] on <html> switches
    the whole app. Palette: emerald primary + semantic status colours
    (status colours unchanged, so a status keeps its meaning across the
    re-theme). Every status colour is paired with text/icon in the UI —
