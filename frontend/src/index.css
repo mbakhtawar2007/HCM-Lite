@@ -1,4 +1,12 @@
-/* HCM Lite design system — Phase 4, indigo theme pass (local only).
+/* HCM Lite design system — Phase 4, indigo theme pass, bolder-colour
+   pass (local only): the indigo identity is now visible on the
+   sidebar, topbar, cards/KPIs and home hero, not just on accents.
+   Sidebar text #fff on #1e1b4b 15.99:1, muted #c7d2fe/#a5b4fc on
+   #1e1b4b 10.72:1/8.02:1, active #fff on #4338ca 7.90:1; topbar text
+   13.5–16.5:1 and muted 5.7–6.9:1 across its gradient; card/KPI text
+   13.7–15.0:1 and muted 5.8–6.6:1 on the tinted backgrounds; hero
+   fallback #4338ca on bg 7.44:1 light, #818cf8 on bg 6.21:1 dark.
+   All AA. Status colours and chart palette are unchanged.
    One token set, used by every component. Light theme is the default;
    [data-theme="dark"] on <html> switches the whole app. Palette: indigo
    primary + semantic status colours (status colours unchanged, so a
@@ -47,6 +55,14 @@
   --font-2xl: 2rem;
   --sidebar-w: 240px;
   --topbar-h: 60px;
+  /* Bolder-colour pass: indigo sidebar/topbar/card surfaces */
+  --sidebar-bg: #1e1b4b;
+  --sidebar-text: #ffffff;
+  --sidebar-muted: #c7d2fe;
+  --sidebar-hover-bg: #312e81;
+  --sidebar-active-bg: #4338ca;
+  --topbar-bg: linear-gradient(90deg, #eef2ff, #ffffff);
+  --card-bg: #f5f3ff;
   /* Semantic status colours (light) — unchanged by the indigo re-theme */
   --st-present: #0f766e;
   --st-late: #b45309;
@@ -74,6 +90,15 @@
   --primary: #818cf8;
   --primary-hover: #a5b4fc;
   --primary-soft: #1e1b4b;
+  /* Bolder-colour pass: same indigo sidebar as light theme (distinct
+     from the generic dark surface), indigo-to-surface topbar gradient */
+  --sidebar-bg: #1e1b4b;
+  --sidebar-text: #ffffff;
+  --sidebar-muted: #a5b4fc;
+  --sidebar-hover-bg: #312e81;
+  --sidebar-active-bg: #4338ca;
+  --topbar-bg: linear-gradient(90deg, #1e1b4b, #171e26);
+  --card-bg: #1c1f33;
   --danger: #f87171;
   --danger-soft: #3b1d1d;
   --warning: #fbbf24;
@@ -153,8 +178,8 @@ code {
 .sidebar {
   width: var(--sidebar-w);
   flex-shrink: 0;
-  background: var(--surface);
-  border-right: 1px solid var(--border);
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--sidebar-hover-bg);
   padding: var(--space-4);
   display: flex;
   flex-direction: column;
@@ -167,7 +192,7 @@ code {
 .sidebar .brand {
   font-weight: 800;
   font-size: 1.25rem;
-  color: var(--text);
+  color: var(--sidebar-text);
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -179,8 +204,8 @@ code {
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  background: var(--primary);
-  color: #fff;
+  background: #fff;
+  color: #4338ca;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -193,7 +218,7 @@ code {
   gap: 2px;
 }
 .sidebar nav a {
-  color: var(--text);
+  color: var(--sidebar-text);
   padding: 0.55rem 0.75rem;
   border-radius: var(--radius-sm);
   display: flex;
@@ -204,19 +229,19 @@ code {
     color 0.2s ease;
 }
 .sidebar nav a:hover {
-  background: var(--surface-2);
+  background: var(--sidebar-hover-bg);
   text-decoration: none;
 }
 .sidebar nav a.active {
-  background: var(--primary-soft);
-  color: var(--primary);
+  background: var(--sidebar-active-bg);
+  color: #fff;
   font-weight: 600;
 }
 .sidebar-section {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--muted);
+  color: var(--sidebar-muted);
   padding: var(--space-3) 0.75rem 0.25rem;
 }
 .sidebar-backdrop {
@@ -234,7 +259,7 @@ code {
   align-items: center;
   gap: var(--space-3);
   padding: 0 var(--space-5);
-  background: var(--surface);
+  background: var(--topbar-bg);
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
@@ -337,6 +362,17 @@ code {
   font-size: 2.25rem;
   line-height: 1.15;
   margin: 0 0 0.75rem;
+  /* Fallback colour first (AA on the page bg), gradient only where
+     background-clip:text is supported, so the heading is never lost. */
+  color: var(--primary);
+}
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .hero h1 {
+    background: linear-gradient(90deg, var(--primary), var(--chart-4));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
 }
 .hero p {
   color: var(--muted);
@@ -362,11 +398,25 @@ code {
   margin-bottom: 1rem;
 }
 .kpi-card {
-  background: var(--surface);
+  background: var(--card-bg);
   border: 1px solid var(--border);
+  border-top: 4px solid var(--chart-1);
   border-radius: var(--radius);
   padding: 1.25rem;
   box-shadow: var(--shadow);
+}
+/* KPI top accent rotates through the chart palette, in grid order. */
+.kpi-grid > .kpi-card:nth-child(5n + 2) {
+  border-top-color: var(--chart-2);
+}
+.kpi-grid > .kpi-card:nth-child(5n + 3) {
+  border-top-color: var(--chart-3);
+}
+.kpi-grid > .kpi-card:nth-child(5n + 4) {
+  border-top-color: var(--chart-4);
+}
+.kpi-grid > .kpi-card:nth-child(5n + 5) {
+  border-top-color: var(--chart-5);
 }
 .kpi-card .kpi-label {
   font-size: var(--font-sm);
@@ -385,7 +435,7 @@ code {
 
 /* ---------- Cards, forms, buttons ---------- */
 .card {
-  background: var(--surface);
+  background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 1.5rem;
@@ -1181,6 +1231,7 @@ code {
   }
   .card {
     box-shadow: none;
+    background: #fff;
     border: 1px solid #999;
     break-inside: avoid;
   }
