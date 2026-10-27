@@ -46,14 +46,36 @@ export default function CameraCheckIn({ onDone, onError }) {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
+      // BUG FIX (screenshot, 2026-10-27): the <video> element only
+      // renders when active === true, so on the first "Open camera"
+      // click videoRef.current is still null here. The old code
+      // attached the stream only "if (videoRef.current)" — which
+      // was false — then set active, leaving a permanently black
+      // preview with no srcObject and no frame, which is exactly
+      // what the screenshot shows ("Waiting for the camera frame…").
+      // Now: render first, then wait for the element to exist, and
+      // only then attach the stream and play it.
       setActive(true);
+      for (let i = 0; i < 50 && !videoRef.current; i++) {
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      const video = videoRef.current;
+      if (!video) {
+        setStatus('Camera preview did not appear — close the camera and open it again.');
+        return;
+      }
+      if (stream.getVideoTracks()[0]?.readyState === 'ended') {
+        setStatus(
+          'Camera stream ended before it started — another app may be using the camera. Close it and try again.',
+        );
+        return;
+      }
+      video.srcObject = stream;
+      await video.play();
       if (await waitForFrame()) setVideoReady(true);
       else setStatus('Camera opened but no frame arrived yet — wait a second, then try again.');
     } catch {
+      stop();
       setStatus('Camera unavailable — allow camera access, or use the normal check-in button.');
       onError?.('Camera unavailable');
     }
@@ -122,10 +144,9 @@ export default function CameraCheckIn({ onDone, onError }) {
     } catch (err) {
       const raw = err?.response?.data?.message || err.message || 'Camera check-in failed';
       // Never show MediaPipe's raw INTERNAL/ROI stack text to the user.
-      const msg =
-        /INTERNAL|CalculatorGraph|ROI width|roi->width/i.test(raw)
-          ? 'Face detector received an empty camera frame — wait until the preview shows your face, then try again'
-          : raw;
+      const msg = /INTERNAL|CalculatorGraph|ROI width|roi->width/i.test(raw)
+        ? 'Face detector received an empty camera frame — wait until the preview shows your face, then try again'
+        : raw;
       setStatus(`${msg} — you can still use the normal check-in button.`);
       onError?.(msg);
     } finally {
