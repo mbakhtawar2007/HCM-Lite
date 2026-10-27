@@ -153,6 +153,40 @@ export default function Settings() {
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
+  const [locBusy, setLocBusy] = useState(false);
+  const [locMsg, setLocMsg] = useState('');
+  // One-tap office location, like food-delivery apps: use the Admin's
+  // current device GPS instead of copying coordinates from Maps.
+  // It only fills the two fields — the Admin still clicks Save
+  // settings, so a stray GPS reading can never silently change the
+  // office location on its own.
+  const useCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setLocMsg('Location is not available in this browser — enter latitude and longitude manually.');
+      return;
+    }
+    setLocBusy(true);
+    setLocMsg('');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude, accuracy } = pos.coords;
+        setSetting((s) => (s ? { ...s, officeLat: latitude, officeLng: longitude } : s));
+        setLocMsg(
+          `Location detected: ${latitude.toFixed(6)}, ${longitude.toFixed(6)} (accuracy ±${Math.round(accuracy)}m). Click Save settings to apply it.`,
+        );
+        setLocBusy(false);
+      },
+      (err) => {
+        setLocMsg(
+          err.code === 1
+            ? 'Location permission denied — allow location for this site and try again, or enter the coordinates manually.'
+            : 'Could not detect location — try again (outdoors works best), or enter the coordinates manually.',
+        );
+        setLocBusy(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+    );
+  };
   const loadSetting = () =>
     getSetting()
       .then((d) => setSetting(d.setting))
@@ -243,6 +277,14 @@ export default function Settings() {
               onChange={(e) => setSetting({ ...setting, officeLng: e.target.value })}
               disabled={readOnly}
             />
+            {!readOnly && (
+              <p className="page-actions">
+                <Button type="button" variant="ghost" disabled={locBusy} onClick={useCurrentLocation}>
+                  {locBusy ? 'Detecting location…' : '📍 Use my current location'}
+                </Button>
+              </p>
+            )}
+            {locMsg && <p className="muted">{locMsg}</p>}
             <p className="muted">
               Weekends: {setting.weekendDays?.join(', ')} · Late after{' '}
               {Math.floor((setting.officeStartMinutes + setting.graceMinutes) / 60)}:
