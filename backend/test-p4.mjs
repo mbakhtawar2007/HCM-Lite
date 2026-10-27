@@ -144,6 +144,13 @@ check(
 r = await call('POST', '/api/attendance/check-in', empA.token);
 check('employee check-in', r.status === 201, JSON.stringify(r.json));
 const attId = r.json.attendance._id;
+// The correction must be for the record's own day: a cross-day
+// requested time would corrupt the record (Jan check-in, Oct
+// check-out), and the controller now rejects it. Build the fixture
+// from the record's actual date instead of a fixed January date.
+const attDay = new Date(r.json.attendance.date);
+attDay.setUTCHours(9, 0, 0, 0);
+const correctionCheckIn = attDay.toISOString();
 r = await call('POST', '/api/attendance/check-out', empA.token);
 check('employee check-out', r.status === 200, JSON.stringify(r.json));
 a = await audit('UPDATE', 'Attendance');
@@ -154,7 +161,7 @@ check(
 );
 r = await call('POST', '/api/attendance/corrections', empA.token, {
   attendanceId: attId,
-  requestedCheckIn: '2026-01-05T09:00:00.000Z',
+  requestedCheckIn: correctionCheckIn,
   reason: 'Forgot to check in on time',
 });
 check('correction request succeeds', r.status === 201, JSON.stringify(r.json));

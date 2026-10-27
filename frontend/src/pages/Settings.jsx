@@ -10,8 +10,19 @@ import ErrorState from '../components/ui/ErrorState.jsx';
 import ConfirmDialog from '../components/ui/ConfirmDialog.jsx';
 import { useToast } from '../components/ui/Toast.jsx';
 import { getErrorMessage } from '../utils/errors.js';
+import { minutesToTime, timeToMinutes } from '../utils/time.js';
 
-function Section({ title, section, fields, readOnly }) {
+const DAY_NAMES = {
+  Sat: 'Saturday',
+  Sun: 'Sunday',
+  Mon: 'Monday',
+  Tue: 'Tuesday',
+  Wed: 'Wednesday',
+  Thu: 'Thursday',
+  Fri: 'Friday',
+};
+
+function Section({ title, section, fields, readOnly, help }) {
   const { showToast } = useToast();
   const [items, setItems] = useState([]);
   const [form, setForm] = useState({});
@@ -74,6 +85,7 @@ function Section({ title, section, fields, readOnly }) {
   };
   return (
     <Card title={title}>
+      {help && <p className="muted">{help}</p>}
       {error && <p className="alert alert-error">{error}</p>}
       <ul className="item-list">
         {items.map((it) => (
@@ -223,8 +235,8 @@ export default function Settings() {
         title="Company setup"
         subtitle={
           readOnly
-            ? 'HR view is read-only; only Admin can change these.'
-            : 'Admin only. Attendance and leave rules are read from these settings, not hard-coded.'
+            ? 'You can look, but only an Admin can change these settings.'
+            : 'Set up your company once: working hours, check-in location, departments, leave types and holidays. Everything else in the app follows these rules.'
         }
       />
       {error && <ErrorState message={error} onRetry={loadSetting} />}
@@ -234,26 +246,34 @@ export default function Settings() {
       ) : (
         <Card title="Office rules">
           <form onSubmit={save} className="form">
+            <h3>Your company</h3>
             <Input
-              label="Company"
+              label="Company name"
               value={setting.companyName}
               onChange={(e) => setSetting({ ...setting, companyName: e.target.value })}
               disabled={readOnly}
             />
+            <h3>Working hours</h3>
             <Input
-              label="Office start (minutes after midnight, 540 = 09:00)"
-              type="number"
-              value={setting.officeStartMinutes}
-              onChange={(e) => setSetting({ ...setting, officeStartMinutes: e.target.value })}
+              label="Office start time"
+              type="time"
+              value={minutesToTime(setting.officeStartMinutes)}
+              onChange={(e) => setSetting({ ...setting, officeStartMinutes: timeToMinutes(e.target.value) })}
               disabled={readOnly}
             />
             <Input
-              label="Grace (minutes)"
+              label="Grace period (minutes)"
               type="number"
               value={setting.graceMinutes}
               onChange={(e) => setSetting({ ...setting, graceMinutes: e.target.value })}
               disabled={readOnly}
             />
+            <p className="muted">
+              The grace period is how late someone can be before they count as late. With a{' '}
+              {minutesToTime(setting.officeStartMinutes)} start and {setting.graceMinutes} minutes grace, someone is
+              late after {minutesToTime(Number(setting.officeStartMinutes) + Number(setting.graceMinutes))}.
+            </p>
+            <h3>Location for check-ins</h3>
             <Input
               label="Office radius (metres)"
               type="number"
@@ -261,8 +281,12 @@ export default function Settings() {
               onChange={(e) => setSetting({ ...setting, officeRadiusMeters: e.target.value })}
               disabled={readOnly}
             />
+            <p className="muted">
+              Check-ins must be inside this circle around the office. Leave the latitude and longitude blank if you do
+              not want location checks at all.
+            </p>
             <Input
-              label="Office latitude (blank = no location check)"
+              label="Office latitude"
               type="number"
               step="any"
               value={setting.officeLat ?? ''}
@@ -270,7 +294,7 @@ export default function Settings() {
               disabled={readOnly}
             />
             <Input
-              label="Office longitude (blank = no location check)"
+              label="Office longitude"
               type="number"
               step="any"
               value={setting.officeLng ?? ''}
@@ -286,15 +310,13 @@ export default function Settings() {
             )}
             {locMsg && <p className="muted">{locMsg}</p>}
             <p className="muted">
-              Weekends: {setting.weekendDays?.join(', ')} · Late after{' '}
-              {Math.floor((setting.officeStartMinutes + setting.graceMinutes) / 60)}:
-              {String((setting.officeStartMinutes + setting.graceMinutes) % 60).padStart(2, '0')} · When latitude and
-              longitude are set, check-in requires the employee&rsquo;s location to be inside the radius; otherwise
-              check-in works without location.
+              Days off each week: {(setting.weekendDays || []).map((d) => DAY_NAMES[d] || d).join(', ') || 'None set'}.
+              When latitude and longitude are set, check-in requires the employee&rsquo;s location to be inside the
+              radius; otherwise check-in works without location.
             </p>
             {!readOnly && (
               <Button type="submit" disabled={busy}>
-                {busy ? 'Saving…' : 'Save settings'}
+                {busy ? 'Saving…' : 'Save company settings'}
               </Button>
             )}
           </form>
@@ -304,34 +326,38 @@ export default function Settings() {
         title="Departments"
         section="departments"
         readOnly={readOnly}
+        help="Groups employees belong to, for example Engineering or Sales. Employees must pick a department that already exists here."
         fields={[
-          { key: 'name', label: 'Name', required: true },
-          { key: 'description', label: 'Description' },
+          { key: 'name', label: 'Department name', required: true },
+          { key: 'description', label: 'Description (optional)' },
         ]}
       />
       <Section
         title="Designations"
         section="designations"
         readOnly={readOnly}
-        fields={[{ key: 'name', label: 'Name', required: true }]}
+        help="Job titles, for example Software Engineer or HR Executive."
+        fields={[{ key: 'name', label: 'Job title', required: true }]}
       />
       <Section
         title="Leave types"
         section="leave-types"
         readOnly={readOnly}
+        help="Kinds of leave and how many days each employee gets per year. Leave the quota blank for unlimited leave (used for Unpaid)."
         fields={[
-          { key: 'code', label: 'Code (e.g. ANNUAL)', required: true },
-          { key: 'name', label: 'Name', required: true },
-          { key: 'yearlyQuota', label: 'Yearly quota', type: 'number' },
+          { key: 'code', label: 'Short code (e.g. ANNUAL)', required: true },
+          { key: 'name', label: 'Leave name', required: true },
+          { key: 'yearlyQuota', label: 'Days per year', type: 'number' },
         ]}
       />
       <Section
         title="Holidays"
         section="holidays"
         readOnly={readOnly}
+        help="Days the office is closed. Holidays are not counted as working days for attendance or leave."
         fields={[
           { key: 'date', label: 'Date', type: 'date', required: true },
-          { key: 'name', label: 'Name', required: true },
+          { key: 'name', label: 'Holiday name', required: true },
         ]}
       />
     </>

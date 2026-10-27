@@ -7,7 +7,19 @@
      cannot shadow a newer build.
    If registration fails, the app works exactly as before (no SW). */
 const CACHE = 'hcm-lite-static-v1';
-self.addEventListener('install', (event) => { self.skipWaiting(); });
+self.addEventListener('install', (event) => {
+  // Pre-cache the app shell, otherwise the navigation fallback below
+  // can never hit: nothing else ever stored /index.html in this cache,
+  // so an offline navigation fell through to Response.error() and
+  // Chrome logged a FetchEvent network-error warning (2026-10-27).
+  event.waitUntil((async () => {
+    try {
+      const c = await caches.open(CACHE);
+      await c.add('/index.html');
+    } catch { /* offline on first install: app still works online */ }
+  })());
+  self.skipWaiting();
+});
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
@@ -21,8 +33,15 @@ self.addEventListener('fetch', (event) => {
   if (url.pathname.startsWith('/api')) return; // never cache API
   if (event.request.mode === 'navigate') {
     event.respondWith((async () => {
-      try { return await fetch(event.request); }
-      catch { const c = await caches.open(CACHE); return (await c.match('/index.html')) || Response.error(); }
+      try {
+        const res = await fetch(event.request);
+        // Keep the shell fresh for the next offline fallback.
+        if (res.ok) {
+          const c = await caches.open(CACHE);
+          await c.put('/index.html', res.clone());
+        }
+        return res;
+      } catch { const c = await caches.open(CACHE); return (await c.match('/index.html')) || Response.error(); }
     })());
     return;
   }

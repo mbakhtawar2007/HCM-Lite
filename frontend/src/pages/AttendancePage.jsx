@@ -26,6 +26,10 @@ import { DonutChart } from '../components/Charts.jsx';
 export default function AttendancePage() {
   const { user } = useAuth();
   const isStaff = ['ADMIN', 'HR'].includes(user?.role);
+  // Only HR and Employees mark attendance (user decision 2026-10-27).
+  // Admins view the daily board below; they never check in, even if
+  // an employee record is linked to their login.
+  const canMark = ['HR', 'EMPLOYEE'].includes(user?.role);
   const [mine, setMine] = useState([]);
   const [board, setBoard] = useState([]);
   const [corrections, setCorrections] = useState([]);
@@ -111,27 +115,36 @@ export default function AttendancePage() {
       {msg && <p className="alert alert-success">{msg}</p>}
       {
         <Card title="Today">
-          <p className="page-actions">
-            <Button disabled={busy} onClick={() => act(doCheckIn, 'Checked in.')}>
-              Check in
-            </Button>{' '}
-            <Button variant="ghost" disabled={busy} onClick={() => act(checkOut, 'Checked out.')}>
-              Check out
-            </Button>
-          </p>
-          <p className="muted">
-            If your company set an office location, check-in asks for your location and must be inside the office
-            radius. Staff (HR/Admin) can check in only if an employee record is linked to their login — otherwise
-            check-in explains that.
-          </p>
-          <div style={{ marginTop: '1rem' }}>
-            <h3>Camera check-in (optional, bonus)</h3>
+          {canMark ? (
+            <>
+              <p className="page-actions">
+                <Button disabled={busy} onClick={() => act(doCheckIn, 'Checked in.')}>
+                  Check in
+                </Button>{' '}
+                <Button variant="ghost" disabled={busy} onClick={() => act(checkOut, 'Checked out.')}>
+                  Check out
+                </Button>
+              </p>
+              <p className="muted">
+                If your company set an office location, check-in asks for your location and must be inside the office
+                radius. HR can check in only if an employee record is linked to their login — otherwise check-in
+                explains that.
+              </p>
+              <div style={{ marginTop: '1rem' }}>
+                <h3>Camera check-in (optional, bonus)</h3>
+                <p className="muted">
+                  Front camera + one face detected + inside the office radius + GPS accuracy 100m or better. A failed
+                  camera check falls back to the normal check-in button above — it never creates a camera record on its
+                  own.
+                </p>
+                <CameraCheckIn onDone={() => load()} />
+              </div>
+            </>
+          ) : (
             <p className="muted">
-              Front camera + one face detected + inside the office radius + GPS accuracy 100m or better. A failed camera
-              check falls back to the normal check-in button above — it never creates a camera record on its own.
+              Admin accounts do not mark attendance. Only HR and Employees check in — Admins view the daily board below.
             </p>
-            <CameraCheckIn onDone={() => load()} />
-          </div>
+          )}
         </Card>
       }
       {!loading && statusData.length > 0 && (

@@ -67,36 +67,38 @@ export default function Setup() {
     <>
       <PageHeader
         title="Set up HCM Lite"
-        subtitle="First run: name your company and create the first Admin account. This page only works until the first account exists."
+        subtitle="First time here? Do this once, and you are done: name your company and create your own Admin sign-in. After this page, sign in and add departments, employees and HR logins from inside the app."
       />
-      <Card title="Set up HCM Lite">
-        <p className="muted">
-          First run: name your company and create the first Admin account. This page only works until the first account
-          exists.
-        </p>
+      <Card title="Step 1 — Create your company and Admin account">
         <form onSubmit={handleSubmit} className="form">
           {error && <p className="alert alert-error">{error}</p>}
+          <h3>Your company</h3>
           <Input
             label="Company name"
             required
             value={form.companyName}
             onChange={(e) => setForm({ ...form, companyName: e.target.value })}
           />
+          <h3>Your Admin account</h3>
+          <p className="muted">
+            This is the account you will sign in with. It can do everything in the app. You can add HR accounts later
+            from the Users page.
+          </p>
           <Input
-            label="Admin name"
+            label="Your full name"
             required
             value={form.adminName}
             onChange={(e) => setForm({ ...form, adminName: e.target.value })}
           />
           <Input
-            label="Admin email"
+            label="Your email (you will sign in with this)"
             type="email"
             required
             value={form.adminEmail}
             onChange={(e) => setForm({ ...form, adminEmail: e.target.value })}
           />
           <Input
-            label="Admin password (at least 8 characters)"
+            label="Choose a password (at least 8 characters)"
             type="password"
             required
             minLength={8}
@@ -104,7 +106,7 @@ export default function Setup() {
             onChange={(e) => setForm({ ...form, adminPassword: e.target.value })}
           />
           <Button type="submit" disabled={busy}>
-            {busy ? 'Setting up…' : 'Create company and Admin'}
+            {busy ? 'Setting up…' : 'Create my company and Admin account'}
           </Button>
         </form>
       </Card>

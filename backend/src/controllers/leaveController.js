@@ -185,6 +185,13 @@ export const decideLeave = asyncHandler(async (req, res) => {
   const leave = await LeaveRequest.findById(req.params.id).populate('leaveType');
   if (!leave) throw notFoundError('Leave request not found');
   if (leave.status !== 'PENDING') throw conflict('Leave already decided');
+  // Nobody approves or rejects their own leave: an HR/Admin user with a
+  // linked employee record must have someone else decide it. This is
+  // the same rule the AI policy text already states.
+  const { Employee: LeaveEmployee } = await import('../models/Employee.js');
+  const leaveEmployee = await LeaveEmployee.findById(leave.employee);
+  if (leaveEmployee && String(leaveEmployee.user) === String(req.user._id))
+    throw forbidden('You cannot decide your own leave request');
   if (req.body.status === 'APPROVED' && !leave.leaveType.isUnlimited) {
     const setting = await getSetting();
     const holidays = await Holiday.find();

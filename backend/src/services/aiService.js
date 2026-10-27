@@ -352,7 +352,18 @@ export async function smartLeave(text) {
       lastError = 'unknown leave type';
       continue;
     }
-    if (!start || !end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
+    // Strict calendar check: dayStart() rolls an impossible date over
+    // (2026-02-30 becomes 2026-03-02), so a rolled-over date must be
+    // rejected here, not returned to the leave form as-is.
+    if (
+      !start ||
+      !end ||
+      Number.isNaN(start.getTime()) ||
+      Number.isNaN(end.getTime()) ||
+      start.toISOString().slice(0, 10) !== parsed.start ||
+      end.toISOString().slice(0, 10) !== parsed.end ||
+      end < start
+    ) {
       lastError = 'invalid dates';
       continue;
     }

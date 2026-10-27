@@ -46,7 +46,17 @@ export default function AdminDashboard() {
   }, []);
   return (
     <>
-      <PageHeader title="Admin dashboard" subtitle={`Signed in as ${user?.email} · Role: ADMIN`} />
+      <PageHeader
+        title="Admin dashboard"
+        subtitle={`Signed in as ${user?.email} · Admin. Everything below comes from real records in the date range you pick — nothing here is made up.`}
+      />
+      <Card title="Start here">
+        <p className="muted">
+          New to the app? Do these in order: <a href="/settings">1. Company setup</a> (departments and working hours) →{' '}
+          <a href="/employees">2. Register employees</a> → <a href="/users">3. Create HR logins</a> →{' '}
+          <a href="/payroll">4. Run payroll</a>.
+        </p>
+      </Card>
       <DashboardFilters
         filters={filters}
         setFilters={setFilters}
@@ -68,14 +78,19 @@ export default function AdminDashboard() {
       {data && (
         <>
           <div className="kpi-grid">
-            <KpiCard label={`Headcount (at ${data.filters.to})`} value={data.headcount} />
-            <KpiCard label="Headcount (at period start)" value={data.headcountAtPeriodStart} />
-            <KpiCard label="Exits this year" value={data.exitsYtd} />
-            <KpiCard label="Attrition YTD" value={<Rate value={data.attritionYtd} />} />
-            <KpiCard label="Payroll cost (net, finalized only)" value={`Rs ${data.payrollCost}`} />
-            <KpiCard label="Finalized runs in range" value={data.finalizedRunsInRange} />
+            <KpiCard label="Employees now" value={data.headcount} sub="Active employees today" />
+            <KpiCard label="Employees at start of period" value={data.headcountAtPeriodStart} />
+            <KpiCard label="People who left this year" value={data.exitsYtd} />
+            <KpiCard label="Leaving rate this year" value={<Rate value={data.attritionYtd} />} />
+            <KpiCard
+              label="Payroll cost (final pay only)"
+              value={`Rs ${data.payrollCost}`}
+              sub="Total take-home pay, finalised months only"
+            />
+            <KpiCard label="Pay months finalised in range" value={data.finalizedRunsInRange} />
           </div>
-          <Card title="Payroll (finalized runs only)">
+          <Card title="Payroll — final pay only">
+            <p className="muted">Only months you have finalised count here. Drafts do not count yet.</p>
             <ul className="item-list">
               <li>
                 <span>Gross payable</span>
@@ -87,7 +102,7 @@ export default function AdminDashboard() {
               </li>
             </ul>
           </Card>
-          <Card title="Headcount by department">
+          <Card title="People by department">
             <HBarChart
               data={data.headcountByDepartment}
               label={(r) => r.name}
@@ -107,7 +122,7 @@ export default function AdminDashboard() {
               </ul>
             )}
           </Card>
-          <Card title="Payroll cost by department (net pay)">
+          <Card title="Payroll cost by department">
             <HBarChart
               data={data.payrollCostByDepartment}
               label={(r) => r.department}
@@ -127,7 +142,7 @@ export default function AdminDashboard() {
               </ul>
             )}
           </Card>
-          <Card title="Headcount by designation">
+          <Card title="People by job title">
             {data.headcountByDesignation.length === 0 ? (
               <p className="muted">No data yet.</p>
             ) : (
@@ -141,7 +156,7 @@ export default function AdminDashboard() {
               </ul>
             )}
           </Card>
-          <Card title="Payroll cost by designation (net pay)">
+          <Card title="Payroll cost by job title">
             {data.payrollCostByDesignation.length === 0 ? (
               <p className="muted">No finalized payroll in this range yet.</p>
             ) : (
@@ -157,7 +172,7 @@ export default function AdminDashboard() {
               </ul>
             )}
           </Card>
-          <Card title="Tenure (from joining date)">
+          <Card title="How long people have worked here">
             <HBarChart
               data={data.tenureDistribution}
               label={(r) => r.bucket}
@@ -165,7 +180,7 @@ export default function AdminDashboard() {
               format={(v) => `${v} people`}
             />
           </Card>
-          <Card title="Gender breakdown (collected values only)">
+          <Card title="Gender (only where employees shared it)">
             {data.genderBreakdown?.available ? (
               <ul className="item-list">
                 {Object.entries(data.genderBreakdown.byGender).map(([g, n]) => (
@@ -182,13 +197,13 @@ export default function AdminDashboard() {
               Employees without a gender are counted as &quot;Not specified&quot; — no value is ever assigned for them.
             </p>
           </Card>
-          <Card title="Probation">
+          <Card title="On probation">
             <p className="muted">
               On probation (probation end date on or after {data.filters.to}):{' '}
               <strong>{data.probation?.onProbation ?? 0}</strong> of {data.probation?.total ?? 0} active employees.
             </p>
           </Card>
-          <Card title="Absence anomalies (real records only)">
+          <Card title="Unusual absence patterns">
             {(data.absenceAnomalies || []).length === 0 ? (
               <p className="muted">No anomaly flags in this range.</p>
             ) : (
@@ -208,7 +223,7 @@ export default function AdminDashboard() {
               least 5 due days.
             </p>
           </Card>
-          <Card title="Attrition risk — indicator, not a prediction">
+          <Card title="Who might leave (indicator only, not a prediction)">
             {(data.attritionRisk || []).length === 0 ? (
               <p className="muted">No employees in this range.</p>
             ) : (

@@ -14,7 +14,9 @@ const STAFF = [
   { to: '/settings', label: 'Company setup', icon: '⚙' },
 ];
 const ADMIN_ONLY = [
-  { to: '/users', label: 'Users', icon: '🔑' },
+  // Label only, route unchanged: "Users" was easily confused with
+  // "Employees" (people records). This page is sign-in accounts.
+  { to: '/users', label: 'Sign-in accounts', icon: '🔑' },
   { to: '/audit', label: 'Audit log', icon: '📋' },
 ];
 

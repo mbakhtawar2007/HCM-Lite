@@ -18,12 +18,12 @@ export default function AuditPage() {
   const [filters, setFilters] = useState({ entity: '', action: '', actor: '', from: '', to: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
-  const load = async (p = page) => {
+  const load = async (p = page, f = filters) => {
     setError('');
     setLoading(true);
     try {
       const params = { page: p, limit: 50 };
-      for (const [k, v] of Object.entries(filters)) if (v) params[k] = v;
+      for (const [k, v] of Object.entries(f)) if (v) params[k] = v;
       const d = await listAuditLogs(params);
       setLogs(d.logs);
       setPages(d.pages || 1);
@@ -43,19 +43,46 @@ export default function AuditPage() {
     <>
       <PageHeader
         title="Audit log"
-        subtitle="Admin only. The log is never editable or deletable — there is no update or delete endpoint for it."
+        subtitle="Admin only. A permanent record of who changed what, and when. Nobody can edit or delete entries here — that is the point of the log."
       />
       {error && <ErrorState message={error} onRetry={() => load(1)} />}
-      <Card title="Filters">
+      <Card title="Find entries">
+        <p className="muted">Leave every filter blank to see everything, newest first.</p>
         <div className="form-row">
-          <Input label="Entity" value={filters.entity} onChange={set('entity')} placeholder="Employee" />
-          <Input label="Action" value={filters.action} onChange={set('action')} placeholder="CREATE" />
-          <Input label="Actor email" value={filters.actor} onChange={set('actor')} placeholder="admin@example.com" />
-          <Input label="From" type="date" value={filters.from} onChange={set('from')} />
-          <Input label="To" type="date" value={filters.to} onChange={set('to')} />
+          <Input
+            label="What changed (e.g. Employee)"
+            value={filters.entity}
+            onChange={set('entity')}
+            placeholder="Employee"
+          />
+          <Input
+            label="What happened (e.g. CREATE)"
+            value={filters.action}
+            onChange={set('action')}
+            placeholder="CREATE"
+          />
+          <Input
+            label="Who did it (email)"
+            value={filters.actor}
+            onChange={set('actor')}
+            placeholder="admin@example.com"
+          />
+          <Input label="From date" type="date" value={filters.from} onChange={set('from')} />
+          <Input label="To date" type="date" value={filters.to} onChange={set('to')} />
         </div>
         <p className="page-actions">
-          <Button onClick={() => load(1)}>Apply filters</Button>
+          <Button onClick={() => load(1)}>Search</Button>{' '}
+          <Button
+            variant="ghost"
+            onClick={() => {
+              const cleared = { entity: '', action: '', actor: '', from: '', to: '' };
+              setFilters(cleared);
+              setPage(1);
+              load(1, cleared);
+            }}
+          >
+            Clear filters
+          </Button>
         </p>
       </Card>
       <Card title={`Entries (${total}) — page ${page} of ${pages}`}>

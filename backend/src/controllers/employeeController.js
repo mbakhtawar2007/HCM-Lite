@@ -43,7 +43,12 @@ export const createEmployee = asyncHandler(async (req, res) => {
     probationEndDate,
   } = req.body;
   if (!(await Department.findById(department))) throw badRequest('Department not found');
-  if (designation && !(await Designation.findById(designation))) throw badRequest('Designation not found');
+  if (designation) {
+    const desig = await Designation.findById(designation);
+    if (!desig) throw badRequest('Designation not found');
+    if (String(desig.department) !== String(department))
+      throw badRequest('Designation does not belong to this department');
+  }
   if (await Employee.findOne({ employeeCode: employeeCode.toUpperCase() }))
     throw conflict('An employee with this code already exists');
   let user;
@@ -245,7 +250,25 @@ async function validateImportRows(csvText) {
   const departments = await Department.find();
   const deptByName = new Map(departments.map((d) => [d.name.toLowerCase(), d]));
   const designations = await Designation.find();
-  const desigByName = new Map(designations.map((d) => [d.name.toLowerCase(), d]));
+  // Designations are unique per (name, department), not per name: the
+  // same title can exist in two departments, so keep every match and
+  // pick the one in the row's department below.
+  const desigsByName = new Map();
+  for (const d of designations) {
+    const key = d.name.toLowerCase();
+    if (!desigsByName.has(key)) desigsByName.set(key, []);
+    desigsByName.get(key).push(d);
+  }
+  // A real calendar date: the format check alone is not enough, because
+  // new Date('2026-02-30') silently rolls over to 2026-03-02. The
+  // round-trip check catches impossible dates (same family as the
+  // strict isoDate used by single employee creation and leave apply).
+  const isRealDate = (s) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+    const d = new Date(s);
+    if (Number.isNaN(d.getTime())) return false; // e.g. month 13: toISOString() would throw
+    return d.toISOString().slice(0, 10) === s;
+  };
   const existingCodes = new Set((await Employee.find()).map((e) => e.employeeCode));
   const existingEmails = new Set((await User.find()).map((u) => u.email));
   const validRows = [];
@@ -273,8 +296,19 @@ async function validateImportRows(csvText) {
       seenCodes.add(code);
     }
     if (obj.department && !deptByName.has(obj.department.toLowerCase())) add('department', 'Unknown department');
-    if (obj.designation && !desigByName.has(obj.designation.toLowerCase())) add('designation', 'Unknown designation');
-    if (obj.joiningdate && !/^\d{4}-\d{2}-\d{2}$/.test(obj.joiningdate)) add('joiningDate', 'Date must be YYYY-MM-DD');
+    if (obj.designation) {
+      const matches = desigsByName.get(obj.designation.toLowerCase()) || [];
+      const dept = deptByName.get((obj.department || '').toLowerCase());
+      if (matches.length === 0) add('designation', 'Unknown designation');
+      else if (dept && !matches.some((d) => String(d.department) === String(dept._id)))
+        add('designation', 'Designation does not belong to this department');
+    }
+    if (obj.joiningdate && !isRealDate(obj.joiningdate))
+      add('joiningDate', 'Date must be a real calendar date in YYYY-MM-DD');
+    // probationEndDate used to pass dry-run unvalidated and then throw
+    // a CastError on import, so a "valid" dry-run row failed to import.
+    if (obj.probationenddate && !isRealDate(obj.probationenddate))
+      add('probationEndDate', 'Date must be a real calendar date in YYYY-MM-DD');
     if (obj.basicsalary && !(Number(obj.basicsalary) > 0)) add('basicSalary', 'Salary must be greater than 0');
     if (rowOk) {
       validRows.push({
@@ -283,7 +317,13 @@ async function validateImportRows(csvText) {
         email: obj.email.toLowerCase(),
         employeeCode: obj.employeecode.toUpperCase(),
         department: deptByName.get(obj.department.toLowerCase())._id,
-        designation: obj.designation ? desigByName.get(obj.designation.toLowerCase())._id : null,
+        designation: obj.designation
+          ? (
+              (desigsByName.get(obj.designation.toLowerCase()) || []).find(
+                (d) => String(d.department) === String(deptByName.get(obj.department.toLowerCase())._id),
+              ) || (desigsByName.get(obj.designation.toLowerCase()) || [])[0]
+            )?._id || null
+          : null,
         phone: obj.phone || undefined,
         address: obj.address || undefined,
         gender: ['Male', 'Female', 'Other', 'Prefer not to say'].includes(obj.gender) ? obj.gender : null,

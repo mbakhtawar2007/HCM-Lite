@@ -719,29 +719,38 @@ export async function getHrDashboard(query) {
     else if (status === 'MISSING_CHECKOUT') todaySummary.missingCheckout += 1;
     else todaySummary.present += 1;
   }
-  const pendingLeaves = await LeaveRequest.find({ status: 'PENDING' })
+  // Department filter must apply in the query, not after .limit(20):
+  // filtering the first 20 pending items globally undercounted a
+  // department whenever its pending items fell outside that first 20.
+  // The list stays capped at 20 for display; the counts are true totals.
+  const deptEmployeeIds = departmentId
+    ? (await Employee.find({ department: departmentId }).select('_id')).map((e) => e._id)
+    : null;
+  const pendingLeaveQuery = deptEmployeeIds
+    ? { status: 'PENDING', employee: { $in: deptEmployeeIds } }
+    : { status: 'PENDING' };
+  const pendingLeaves = await LeaveRequest.find(pendingLeaveQuery)
     .populate('leaveType', 'name code')
     .populate({ path: 'employee', populate: { path: 'user', select: 'name email' } })
     .sort({ createdAt: -1 })
     .limit(20);
-  const pendingLeavesFiltered = departmentId
-    ? pendingLeaves.filter((l) => String(l.employee?.department) === String(departmentId))
-    : pendingLeaves;
-  const pendingCorrections = await AttendanceCorrection.find({ status: 'PENDING' })
+  const pendingLeaveCount = await LeaveRequest.countDocuments(pendingLeaveQuery);
+  const pendingCorrectionQuery = deptEmployeeIds
+    ? { status: 'PENDING', employee: { $in: deptEmployeeIds } }
+    : { status: 'PENDING' };
+  const pendingCorrections = await AttendanceCorrection.find(pendingCorrectionQuery)
     .populate({ path: 'employee', populate: { path: 'user', select: 'name email' } })
     .sort({ createdAt: -1 })
     .limit(20);
-  const pendingCorrectionsFiltered = departmentId
-    ? pendingCorrections.filter((c) => String(c.employee?.department) === String(departmentId))
-    : pendingCorrections;
+  const pendingCorrectionCount = await AttendanceCorrection.countDocuments(pendingCorrectionQuery);
   return {
     filters: { from: dateKey(from), to: dateKey(to), department: dept ? { _id: dept._id, name: dept.name } : null },
     headcount,
     today: { date: dateKey(today), isWorkingDay: isWorkingToday, ...todaySummary },
-    pendingLeaveApprovals: pendingLeavesFiltered.length,
-    pendingLeaves: pendingLeavesFiltered,
-    pendingAttendanceCorrections: pendingCorrectionsFiltered.length,
-    pendingCorrections: pendingCorrectionsFiltered,
+    pendingLeaveApprovals: pendingLeaveCount,
+    pendingLeaves,
+    pendingAttendanceCorrections: pendingCorrectionCount,
+    pendingCorrections,
     attendanceTrend: attendance.trend,
     attendanceRate: attendance.attendanceRate,
     lateRate: attendance.lateRate,

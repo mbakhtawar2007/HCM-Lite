@@ -23,13 +23,16 @@ import {
 const router = express.Router();
 router.use(protect);
 
-router.post('/check-in', requireRole('EMPLOYEE', 'HR', 'ADMIN'), validate(checkInSchema), checkIn);
-router.post('/check-in/camera', requireRole('EMPLOYEE', 'HR', 'ADMIN'), validate(cameraCheckInSchema), cameraCheckIn);
-router.post('/check-out', requireRole('EMPLOYEE', 'HR', 'ADMIN'), checkOut);
+// Marking attendance is HR + Employees only (user decision 2026-10-27):
+// Admin accounts never check in, check out, or camera-check-in, even
+// if an employee record happens to be linked to an Admin login.
+router.post('/check-in', requireRole('EMPLOYEE', 'HR'), validate(checkInSchema), checkIn);
+router.post('/check-in/camera', requireRole('EMPLOYEE', 'HR'), validate(cameraCheckInSchema), cameraCheckIn);
+router.post('/check-out', requireRole('EMPLOYEE', 'HR'), checkOut);
 router.get('/me', requireRole('EMPLOYEE', 'HR', 'ADMIN'), myAttendance);
 router.get('/board', requireRole('ADMIN', 'HR'), dailyBoard);
 router.get('/corrections', requireRole('ADMIN', 'HR', 'EMPLOYEE'), listCorrections);
-router.post('/corrections', requireRole('EMPLOYEE', 'HR', 'ADMIN'), validate(correctionSchema), requestCorrection);
+router.post('/corrections', requireRole('EMPLOYEE', 'HR'), validate(correctionSchema), requestCorrection);
 router.patch('/corrections/:id', requireRole('ADMIN', 'HR'), validate(correctionDecisionSchema), decideCorrection);
 router.get('/', requireRole('ADMIN', 'HR', 'EMPLOYEE'), listAttendance);
 

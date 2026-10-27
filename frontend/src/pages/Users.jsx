@@ -82,39 +82,56 @@ export default function Users() {
     <>
       <PageHeader
         title="Users"
-        subtitle="Admin only. New logins start with a temporary password and must change it on first sign-in."
+        subtitle="Admin only. Create sign-in accounts here. A new account gets a temporary password and must set its own password the first time it signs in — this is not the same as registering an employee (see the Employees page)."
       />
       {error && <ErrorState message={error} onRetry={load} />}
       {msg && <p className="alert alert-success">{msg}</p>}
-      <Card title="Create a login">
+      <Card title="Create a sign-in account">
         <form onSubmit={submit} className="form">
-          <Input label="Name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           <Input
-            label="Email"
+            label="Full name"
+            required
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+          />
+          <Input
+            label="Email (they will sign in with this)"
             type="email"
             required
             value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
           />
           <Input
-            label="Temporary password"
+            label="Temporary password (share it with them privately)"
             type="password"
             required
             minLength={8}
             value={form.password}
             onChange={(e) => setForm({ ...form, password: e.target.value })}
           />
-          <Select label="Role" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+          <Select
+            label="Role — what can this person do?"
+            value={form.role}
+            onChange={(e) => setForm({ ...form, role: e.target.value })}
+          >
             <option>ADMIN</option>
             <option>HR</option>
             <option>EMPLOYEE</option>
           </Select>
+          <p className="muted">
+            Admin: runs everything. HR: manages employees, leave and payroll drafts. Employee: sees only their own data.
+            Only HR and Employees mark attendance — Admin accounts never check in.
+          </p>
+          <p className="muted">
+            Tip: to add a new employee, use Employees → Register instead — that creates the login and the employee
+            record together. A bare Employee login created here has no employee record until one is linked to it.
+          </p>
           <Button type="submit" disabled={busy}>
-            {busy ? 'Creating…' : 'Create login'}
+            {busy ? 'Creating…' : 'Create sign-in account'}
           </Button>
         </form>
       </Card>
-      <Card title="All logins">
+      <Card title="All sign-in accounts">
         {loading ? (
           <Skeleton lines={4} />
         ) : users.length === 0 ? (
@@ -135,7 +152,7 @@ export default function Users() {
                     ) : (
                       <Badge status="rejected" label="Deactivated" />
                     )}
-                    {u.mustChangePassword ? ' · Must change password' : ''}
+                    {u.mustChangePassword ? ' · Needs a new password on first sign-in' : ''}
                   </>
                 ),
               },

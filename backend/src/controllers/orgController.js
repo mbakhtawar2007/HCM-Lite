@@ -55,6 +55,14 @@ const crud = (Model, name) => ({
     if (name === 'Designation' && (await Employee.countDocuments({ designation: item._id }))) {
       throw conflict('Designation is in use by employees');
     }
+    // LeaveType had no in-use guard: deleting a used type orphaned its
+    // leave requests, which then vanished from balance accounting
+    // (balances iterate surviving types). Mirror the guards above.
+    if (name === 'LeaveType') {
+      const { LeaveRequest } = await import('../models/LeaveRequest.js');
+      if (await LeaveRequest.countDocuments({ leaveType: item._id }))
+        throw conflict('Leave type is in use by leave requests');
+    }
     await item.deleteOne();
     await writeAudit(req, 'DELETE', name, item._id, item.toJSON(), null);
     res.status(200).json({ success: true, message: `${name} deleted` });

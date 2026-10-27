@@ -183,7 +183,15 @@ async function registerEmployee(code, email, name) {
     department: deptId,
     designation: desigId,
     joiningDate: monthStart,
-    basicSalary: 100000,
+    // Demo-scenario fix (2026-10-27): at basic 100000 the demo's single
+    // half-day attendance in a 22-working-day month gives grossPayable
+    // ~Rs 3,409 against the spec-fixed monthly tax of Rs 10,000 (tax is
+    // on contractual gross x 12 per the brief, NOT on grossPayable),
+    // so netPay > 0 could never pass — a scenario bug, not a payroll
+    // bug. At basic 50000, monthly tax is Rs 1,250 and the half-day
+    // payable is Rs 1,704.55, so netPay is Rs 454.55 > 0 and the check
+    // still asserts the same property.
+    basicSalary: 50000,
   });
   check(`demo 3: HR registers ${code}`, rr.status === 201, JSON.stringify(rr.json));
   return rr.json.employee;

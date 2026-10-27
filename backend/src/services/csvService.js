@@ -37,5 +37,11 @@ export function parseCsv(text) {
 
 export function csvEscape(value) {
   const s = String(value ?? '');
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  // CSV formula injection: a cell starting with =, +, - or @ (even after
+  // leading whitespace, which spreadsheets trim) runs as a formula when
+  // the export is opened in Excel/Sheets. Prefixing with a single quote
+  // forces it to plain text. Only formula-like cells change; normal
+  // values export exactly as before.
+  const escaped = /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  return /^[ \t\r]*[=+\-@]/.test(s) ? `'${escaped}` : escaped;
 }

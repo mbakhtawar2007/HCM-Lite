@@ -15,7 +15,15 @@ import { assertDateQuery, assertObjectIdQuery } from '../utils/queryGuard.js';
 // radius are set in Settings, the employee must send their location and
 // be inside the radius. If no office location is set, check-in works
 // exactly as before (no location required, nothing breaks).
+// Only HR and Employees mark attendance. This guard is defence in
+// depth behind the route roles: an Admin login linked to an employee
+// record must still never create an attendance record.
+const forbidAdminMarking = (role) => {
+  if (role === 'ADMIN') throw forbidden('Admin accounts do not mark attendance — only HR and Employees check in.');
+};
+
 export const checkIn = asyncHandler(async (req, res) => {
+  forbidAdminMarking(req.user.role);
   const emp = await ownEmployeeForSelfService(req.user._id, req.user.role);
   const setting = await getSetting();
   if (setting.officeLat != null && setting.officeLng != null && setting.officeRadiusMeters > 0) {
@@ -48,6 +56,7 @@ export const checkIn = asyncHandler(async (req, res) => {
 });
 
 export const checkOut = asyncHandler(async (req, res) => {
+  forbidAdminMarking(req.user.role);
   const emp = await ownEmployeeForSelfService(req.user._id, req.user.role);
   const record = await Attendance.findOne({ employee: emp._id, date: todayDayStart() });
   if (!record) throw notFoundError('No check-in found for today');
@@ -124,17 +133,34 @@ export const dailyBoard = asyncHandler(async (req, res) => {
 });
 
 export const requestCorrection = asyncHandler(async (req, res) => {
+  forbidAdminMarking(req.user.role);
   const emp = await ownEmployeeForSelfService(req.user._id, req.user.role);
   const attendance = await Attendance.findById(req.body.attendanceId);
   if (!attendance || String(attendance.employee) !== String(emp._id))
     throw notFoundError('Attendance record not found');
   if (!req.body.requestedCheckIn && !req.body.requestedCheckOut)
     throw badRequest('Provide a requested check-in or check-out');
+  // A correction must stay on the record's own day and stay sane: an
+  // impossible date (2026-02-30) rolls over in new Date(), and a
+  // check-out before the check-in would silently corrupt the record
+  // when an approver later applies it. Reject both at request time.
+  const requestedCheckIn = req.body.requestedCheckIn ? new Date(req.body.requestedCheckIn) : null;
+  const requestedCheckOut = req.body.requestedCheckOut ? new Date(req.body.requestedCheckOut) : null;
+  if (requestedCheckIn && Number.isNaN(requestedCheckIn.getTime()))
+    throw badRequest('Requested check-in is not a valid date');
+  if (requestedCheckOut && Number.isNaN(requestedCheckOut.getTime()))
+    throw badRequest('Requested check-out is not a valid date');
+  if (requestedCheckIn && dateKey(requestedCheckIn) !== dateKey(attendance.date))
+    throw badRequest('Requested check-in must be on the same day as the attendance record');
+  if (requestedCheckOut && dateKey(requestedCheckOut) !== dateKey(attendance.date))
+    throw badRequest('Requested check-out must be on the same day as the attendance record');
+  if (requestedCheckIn && requestedCheckOut && requestedCheckOut <= requestedCheckIn)
+    throw badRequest('Requested check-out must be after the requested check-in');
   const correction = await AttendanceCorrection.create({
     employee: emp._id,
     attendance: attendance._id,
-    requestedCheckIn: req.body.requestedCheckIn ? new Date(req.body.requestedCheckIn) : null,
-    requestedCheckOut: req.body.requestedCheckOut ? new Date(req.body.requestedCheckOut) : null,
+    requestedCheckIn,
+    requestedCheckOut,
     reason: req.body.reason,
   });
   await writeAudit(req, 'CREATE', 'AttendanceCorrection', correction._id, null, {
@@ -162,6 +188,11 @@ export const decideCorrection = asyncHandler(async (req, res) => {
   const correction = await AttendanceCorrection.findById(req.params.id);
   if (!correction) throw notFoundError('Correction request not found');
   if (correction.status !== 'PENDING') throw conflict('Correction already decided');
+  // Nobody decides their own correction: the requester is the linked
+  // employee record's user, so an HR user cannot approve their own.
+  const correctionEmployee = await Employee.findById(correction.employee);
+  if (correctionEmployee && String(correctionEmployee.user) === String(req.user._id))
+    throw forbidden('You cannot decide your own correction request');
   const before = correction.toJSON();
   correction.status = req.body.status;
   correction.decidedBy = req.user._id;
@@ -170,6 +201,16 @@ export const decideCorrection = asyncHandler(async (req, res) => {
   if (req.body.status === 'APPROVED') {
     const att = await Attendance.findById(correction.attendance);
     if (att) {
+      // Defence in depth for corrections created before the request-time
+      // checks above: never apply a cross-day or backwards correction.
+      if (
+        (correction.requestedCheckIn && dateKey(correction.requestedCheckIn) !== dateKey(att.date)) ||
+        (correction.requestedCheckOut && dateKey(correction.requestedCheckOut) !== dateKey(att.date)) ||
+        (correction.requestedCheckIn &&
+          correction.requestedCheckOut &&
+          correction.requestedCheckOut <= correction.requestedCheckIn)
+      )
+        throw badRequest('This correction has invalid requested times and cannot be applied');
       if (correction.requestedCheckIn) att.checkIn = correction.requestedCheckIn;
       if (correction.requestedCheckOut) att.checkOut = correction.requestedCheckOut;
       await att.save();
@@ -188,6 +229,7 @@ export const decideCorrection = asyncHandler(async (req, res) => {
 // Any failure here falls back to the normal web check-in / HR
 // correction path (the caller simply does not get a camera record).
 export const cameraCheckIn = asyncHandler(async (req, res) => {
+  forbidAdminMarking(req.user.role);
   const emp = await ownEmployeeForSelfService(req.user._id, req.user.role);
   const { latitude, longitude, accuracy, faceCount } = req.body || {};
   if (faceCount !== 1) throw badRequest('Camera check-in requires exactly one face in the frame');

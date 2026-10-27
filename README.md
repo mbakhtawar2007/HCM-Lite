@@ -189,11 +189,14 @@ setup can never be blocked by a stray public account.
 - **HR/Admin self-service** — a staff login (HR or ADMIN) can now hold
   a linked employee record: Admin registers an employee with
   `existingUserId` instead of name/email/password, and that login then
-  checks in/out, views its own attendance, applies for and cancels its
-  own leave, and views its own finalized payslips. Staff with no linked
+  views its own attendance, applies for and cancels its own leave, and
+  views its own finalized payslips. Staff with no linked
   record get a clear 403 telling them to ask an Admin to link a record
   — never a silent check-in with no record (that would corrupt
-  attendance and payroll). New suite `backend/test-100pct.mjs`.
+  attendance and payroll). **Exception (2026-10-27): Admin accounts do
+  not mark attendance at all — only HR and Employees check in, check
+  out, camera-check-in, or request a correction, even if an employee
+  record is linked to the Admin login.** New suite `backend/test-100pct.mjs`.
 - **Approved-leave cancellation** — an employee (or a linked staff
   user, for their own record) can cancel an APPROVED leave that has not
   started yet; the balance is restored automatically (balances count

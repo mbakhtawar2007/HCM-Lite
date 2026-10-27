@@ -100,7 +100,12 @@ export const deleteRun = asyncHandler(async (req, res) => {
 });
 
 async function scopedLine(req, runId, employeeId) {
-  const run = await PayrollRun.findById(runId).populate('lines.employee');
+  // Populate the employee's linked login too: the payslip PDF prints
+  // employee.user.name, and without this nested populate it was blank.
+  const run = await PayrollRun.findById(runId).populate({
+    path: 'lines.employee',
+    populate: { path: 'user', select: 'name email' },
+  });
   if (!run) throw notFoundError('Payroll run not found');
   if (req.user.role === 'EMPLOYEE') {
     if (run.status !== 'FINALIZED') throw forbidden('Payslips are only available after finalization');
